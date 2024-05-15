@@ -1,0 +1,3 @@
+[submodule "home/libscapi"]
+	path = home/libscapi
+	url = git@github.com:mtrom/libscapi.git
