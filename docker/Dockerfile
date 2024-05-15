@@ -40,6 +40,7 @@ RUN apt-get -y install\
 
 # install cmake dependencies
 RUN apt-get -y install\
+  cmake\
   ninja-build\
   libssl-dev\
   libboost-all-dev\
