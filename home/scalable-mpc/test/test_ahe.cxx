@@ -1,0 +1,73 @@
+#include <gtest/gtest.h>
+
+#include "util/ahe.hpp"
+#include "./fixtures.cxx"
+
+#include "util/bitstring.hpp"
+
+class AHETests : public NetworkTest { };
+
+TEST_F(AHETests, EncryptDecryptBit) {
+  AHE encrypter;
+  for (uint64_t plaintext = 0; plaintext <= 1; plaintext++) {
+    AHE::Ciphertext ciphertext = encrypter.encrypt(plaintext);
+    uint64_t recovered = encrypter.decrypt(ciphertext);
+    EXPECT_EQ(plaintext, recovered);
+  }
+}
+
+TEST_F(AHETests, EncryptDecryptBitString) {
+  AHE encrypter;
+  for (uint64_t plaintext = 0; plaintext < (1 << 8); plaintext++) {
+    BitString expected = BitString::fromUInt(plaintext, 8);
+    std::vector<AHE::Ciphertext> ciphertexts = encrypter.encrypt(expected);
+    BitString actual = encrypter.decrypt(ciphertexts);
+    EXPECT_EQ(expected, actual);
+  }
+}
+
+TEST_F(AHETests, CiphertextAddition) {
+  AHE encrypter;
+  for (uint64_t p0 = 0; p0 <= 1; p0++) {
+    for (uint64_t p1 = 0; p1 <= 1; p1++) {
+      AHE::Ciphertext c0 = encrypter.encrypt(p0);
+      AHE::Ciphertext c1 = encrypter.encrypt(p1);
+      AHE::Ciphertext sum = encrypter.add(c0, c1);
+      uint64_t expected = (p0 + p1) % 2;
+      uint64_t actual = encrypter.decrypt(sum);
+      EXPECT_EQ(expected, actual);
+    }
+  }
+}
+
+TEST_F(AHETests, PlaintextAddition) {
+  AHE encrypter;
+  for (uint64_t p0 = 0; p0 <= 1; p0++) {
+    for (uint64_t p1 = 0; p1 <= 1; p1++) {
+      AHE::Ciphertext c0 = encrypter.encrypt(p0);
+      AHE::Ciphertext sum = encrypter.add(c0, p1);
+      uint64_t expected = (p0 + p1) % 2;
+      uint64_t actual = encrypter.decrypt(sum);
+      EXPECT_EQ(expected, actual);
+    }
+  }
+}
+
+TEST_F(AHETests, SendAndReceive) {
+  BitString expected("10101111");
+  AHE encrypter;
+  auto results = this->launch(
+    [&]() -> bool {
+      std::vector<AHE::Ciphertext> ciphertexts = encrypter.encrypt(expected);
+      AHEUtils::send(ciphertexts, this->sch);
+      return true;
+    },
+    [&]() -> BitString {
+      std::vector<AHE::Ciphertext> ciphertexts = AHEUtils::receive(expected.size(), this->rch);
+      return encrypter.decrypt(ciphertexts);
+    }
+  );
+  BitString actual = results.second;
+  ASSERT_EQ(expected, actual);
+}
+
