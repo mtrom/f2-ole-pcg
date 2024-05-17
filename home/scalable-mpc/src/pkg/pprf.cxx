@@ -1,7 +1,7 @@
 #include <stack>
 
 #include "pkg/pprf.hpp"
-#include "util/ahe.hpp"
+#include "ahe/ahe.hpp"
 
 
 PPRF::PPRF(BitString key, size_t outsize, size_t domainsize)

@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "util/ahe.hpp"
+#include "ahe/ahe.hpp"
 #include "./fixtures.cxx"
 
 #include "util/bitstring.hpp"

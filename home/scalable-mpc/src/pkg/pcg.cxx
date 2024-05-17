@@ -5,7 +5,7 @@
 
 #include "pkg/eqtest.hpp"
 #include "pkg/pprf.hpp"
-#include "util/ahe.hpp"
+#include "ahe/ahe.hpp"
 #include "util/defines.hpp"
 
 namespace Beaver {

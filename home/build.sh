@@ -11,5 +11,8 @@ rm log4cpp-1.1.4.tar.gz
 # build libscapi
 (cd libscapi/; make)
 
+# build relic
+(cd relic/; cmake -DMULTI=PTHREAD . && make)
+
 # build project
 (cd scalable-mpc/build; cmake .. && make)

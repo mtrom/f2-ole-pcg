@@ -1,6 +1,6 @@
 #include <sstream>
 
-#include "util/ahe.hpp"
+#include "ahe/ahe.hpp"
 
 AHE::AHE(int polyModulusDegree, int plaintextModulus) { }
 

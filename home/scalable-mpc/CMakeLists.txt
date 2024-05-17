@@ -16,6 +16,7 @@ include(Documentation)
 include(Warnings)
 include(Curses)
 include(OpenSSL)
+include(relic)
 
 # libscapi
 include_directories(/usr/include/openssl
@@ -36,7 +37,8 @@ set(SOURCES
   src/pkg/pcg.cxx
   src/pkg/pprf.cxx
   src/pkg/rot.cxx
-  src/util/ahe.cxx
+  src/ahe/ahe.cxx
+  src/ahe/curve.cxx
   src/util/bitstring.cxx
   src/util/circuit.cxx
   src/util/random.cxx
