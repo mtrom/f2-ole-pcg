@@ -6,8 +6,8 @@
 #include <iostream>
 
 extern "C" {
-    #include <relic/relic_bn.h>
-    #include <relic/relic_ep.h>
+#include <relic/relic_bn.h>
+#include <relic/relic_ep.h>
 }
 
 namespace EC {
@@ -19,9 +19,9 @@ class EccBrick;
 class Number
 {
 public:
-
   Number();
   Number(const Number& num);
+  Number(const uint32_t& val);
   Number(Number&& moveFrom)
   {
     std::memcpy(&mVal, &moveFrom.mVal, sizeof(bn_t));
@@ -30,17 +30,21 @@ public:
 
   ~Number();
 
+  void randomize();
+
   Number& operator=(const Number& c);
   Number& operator=(const bn_t c);
 
   operator bn_t& () { return mVal; }
   operator const bn_t& () const { return mVal; }
 
+  friend Number operator+(const Number&, int);
 private:
   void init();
   void reduce();
 
   const bn_st* modulus() const;
+  uint64_t sizeBytes() const;
 
 public:
   bn_t  mVal;
@@ -74,7 +78,11 @@ public:
     return *this;
   }
 
+  Point operator+(const Point& addIn) const;
+  Point operator-(const Point& subtractIn) const;
   Point operator*(const Number& multIn) const;
+
+  Point& operator+=(const Point& addIn);
 
   // Multiply a scalar by the generator of the elliptic curve. Unsure if this is the whole
   // curve or a prime order subgroup, but it should be the same as

@@ -9,9 +9,10 @@ class AHETests : public NetworkTest { };
 
 TEST_F(AHETests, EncryptDecryptBit) {
   AHE encrypter;
-  for (uint64_t plaintext = 0; plaintext <= 1; plaintext++) {
+  std::vector<bool> plaintexts({false, true});
+  for (bool plaintext : plaintexts) {
     AHE::Ciphertext ciphertext = encrypter.encrypt(plaintext);
-    uint64_t recovered = encrypter.decrypt(ciphertext);
+    bool recovered = encrypter.decrypt(ciphertext);
     EXPECT_EQ(plaintext, recovered);
   }
 }
@@ -58,16 +59,37 @@ TEST_F(AHETests, SendAndReceive) {
   AHE encrypter;
   auto results = this->launch(
     [&]() -> bool {
+      EC::Curve curve;
       std::vector<AHE::Ciphertext> ciphertexts = encrypter.encrypt(expected);
-      AHEUtils::send(ciphertexts, this->sch);
+      encrypter.send(ciphertexts, this->sch);
       return true;
     },
     [&]() -> BitString {
-      std::vector<AHE::Ciphertext> ciphertexts = AHEUtils::receive(expected.size(), this->rch);
+      EC::Curve curve;
+      std::vector<AHE::Ciphertext> ciphertexts = encrypter.receive(expected.size(), this->rch);
       return encrypter.decrypt(ciphertexts);
     }
   );
   BitString actual = results.second;
+  ASSERT_EQ(expected, actual);
+}
+
+TEST_F(AHETests, SendAndReceiveCompressed) {
+  BitString expected("10101111");
+  auto results = this->launch(
+    [&]() -> AHE {
+      AHE encrypter;
+      std::vector<AHE::Ciphertext> ciphertexts = encrypter.encrypt(expected);
+      encrypter.send(ciphertexts, this->sch, true);
+      return encrypter;
+    },
+    [&]() -> std::vector<AHE::Ciphertext> {
+      AHE receiver;
+      return receiver.receive(expected.size(), this->rch, true);
+    }
+  );
+  AHE encrypter = results.first;
+  BitString actual = encrypter.decrypt(results.second);
   ASSERT_EQ(expected, actual);
 }
 

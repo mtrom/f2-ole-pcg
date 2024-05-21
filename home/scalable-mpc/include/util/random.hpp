@@ -8,12 +8,7 @@
 template<typename T>
 class PRF {
 public:
-  PRF(BitString key) : key(key.toBytes()) {
-    if (this->key.size() > BLOCK_SIZE) {
-      throw std::invalid_argument("[PRF::PRF] provided key too large");
-    }
-    this->key.resize(BLOCK_SIZE);
-  }
+  PRF(BitString key) { this->setKey(key.toBytes()); }
 
   T operator()(uint32_t x) const;
   T operator()(std::pair<uint32_t, uint32_t> x) const;
@@ -21,6 +16,15 @@ public:
   // return a value with some bound (depends on desired type)
   T operator()(uint32_t x, uint32_t bound) const;
   T operator()(std::pair<uint32_t, uint32_t> x, uint32_t bound) const;
+
+  void setKey(const std::vector<unsigned char>& key) {
+    if (key.size() > BLOCK_SIZE) {
+      throw std::invalid_argument("[PRF::setKey] provided key too large");
+    }
+    this->key = key;
+    this->key.resize(BLOCK_SIZE);
+  }
+  const std::vector<unsigned char> getKey() const { return key; }
 
 private:
   std::vector<unsigned char> key;

@@ -193,8 +193,8 @@ BitString Base::sendInnerProductTerm(
   RandomOTSender rots
 ) const {
   AHE ahe;
-  AHEUtils::send(ahe.encrypt(this->s), channel);
-  std::vector<AHE::Ciphertext> response = AHEUtils::receive(this->params.primal.t, channel);
+  ahe.send(ahe.encrypt(this->s), channel);
+  std::vector<AHE::Ciphertext> response = ahe.receive(this->params.primal.t, channel);
   BitString aXs = ahe.decrypt(response);
 
   // use inner product share as payload for pprfs
@@ -213,7 +213,7 @@ BitString Base::receiveInnerProductTerm(
   RandomOTReceiver rots
 ) const {
   AHE ahe;
-  std::vector<AHE::Ciphertext> s = AHEUtils::receive(this->params.primal.k, channel);
+  std::vector<AHE::Ciphertext> s = ahe.receive(this->params.primal.k, channel);
 
   // my share of ⟨aᵢ,s⟩
   BitString share = BitString::sample(this->params.primal.t);
@@ -223,10 +223,11 @@ BitString Base::receiveInnerProductTerm(
     uint32_t idx = (i * this->params.primal.blockSize()) + this->e[i];
 
     // homomorphically compute the inner product of A[idx] and s
-    AHE::Ciphertext ctx;
-    for (uint32_t point : A.getNonZeroElements(idx)) {
-      if (ctx.size() == 0) { ctx = s[point]; }
-      else                 { ctx = ahe.add(ctx, s[point]); }
+    std::set<uint32_t> pointset = A.getNonZeroElements(idx);
+    std::vector<uint32_t> points(pointset.begin(), pointset.end()); // TODO: don't need this?
+    AHE::Ciphertext ctx = s[points[0]];
+    for (size_t i = 1; i < points.size(); i++) {
+      ctx = ahe.add(ctx, s[points[i]]);
     }
 
     // add our share to get their share
@@ -235,7 +236,7 @@ BitString Base::receiveInnerProductTerm(
     aXs.push_back(ctx);
   }
 
-  AHEUtils::send(aXs, channel);
+  ahe.send(aXs, channel);
 
   // retrieve the pprf for each regular error block
   std::vector<PPRF> pprfs = PPRF::receive(

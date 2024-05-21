@@ -9,6 +9,8 @@ extern "C" {
 #include "relic/relic_util.h"
 }
 
+#include "util/bitstring.hpp"
+
 #if !defined(GSL_UNLIKELY)
 #define GSL_UNLIKELY(x) x
 #endif
@@ -38,13 +40,28 @@ Number::Number(const Number& num) {
   *this = num;
 }
 
+Number::Number(const uint32_t& val) {
+  init();
+  *this = val;
+}
+
 Number::Number() {
   init();
 }
 
-
 Number::~Number() {
   bn_clean(*this);
+}
+
+void Number::randomize() {
+  BitString buffer = BitString::sample(this->sizeBytes() + 5);
+  bn_read_bin(*this, buffer.data(), static_cast<int>(buffer.size()));
+
+  if (GSL_UNLIKELY(err_get_code())) {
+    throw std::runtime_error("Relic randomize error");
+  }
+
+  reduce();
 }
 
 Number& Number::operator=(const Number& c) {
@@ -69,6 +86,22 @@ Number& Number::operator=(const bn_t c)
   return *this;
 }
 
+Number operator+(const Number& v, int i) {
+  if (!core_get()) {
+    throw std::runtime_error(
+      "Relic core not initialized on this thread"
+    );
+  }
+
+  Number r;
+  bn_add_dig(r, v, i);
+  if (GSL_UNLIKELY(err_get_code())) {
+    throw std::runtime_error("Relic add error");
+  }
+  r.reduce();
+  return r;
+}
+
 void Number::init() {
   bn_new(mVal);
 }
@@ -88,6 +121,10 @@ void Number::reduce() {
 }
 
 const bn_st* Number::modulus() const { return &core_get()->ep_r; }
+
+uint64_t Number::sizeBytes() const {
+  return bn_size_bin(modulus());
+}
 
 std::ostream& operator<<(std::ostream& out, const Number& val) {
   if (!core_get())
@@ -226,6 +263,37 @@ Point& Point::operator=(const Point& copy) {
   return *this;
 }
 
+Point Point::operator+(const Point& addIn) const {
+  if (!core_get()) {
+    throw std::runtime_error(
+        "Relic core not initialized on this thread"
+    );
+  }
+
+  Point r;
+  ep_add(r, *this, addIn);
+  if (GSL_UNLIKELY(err_get_code())) {
+    throw std::runtime_error("Relic ep_add error");
+  }
+  return r;
+}
+
+Point Point::operator-(const Point& subtractIn) const {
+  if (!core_get()) {
+    throw std::runtime_error(
+        "Relic core not initialized on this thread"
+    );
+  }
+
+  Point r;
+  ep_sub(r, *this, subtractIn);
+  if (GSL_UNLIKELY(err_get_code())) {
+    throw std::runtime_error("Relic ep_add error");
+  }
+  return r;
+}
+
+
 Point Point::operator*(const Number& multIn) const {
   if (!core_get()) {
     throw std::runtime_error(
@@ -239,6 +307,21 @@ Point Point::operator*(const Number& multIn) const {
     throw std::runtime_error("Relic ep_mul error");
   return r;
 }
+
+Point& Point::operator+=(const Point& addIn) {
+  if (!core_get()) {
+    throw std::runtime_error(
+        "Relic core not initialized on this thread"
+    );
+  }
+
+  ep_add(*this, *this, addIn);
+  if (GSL_UNLIKELY(err_get_code())) {
+    throw std::runtime_error("Relic ep_add error");
+  }
+  return *this;
+}
+
 
 Point Point::mulGenerator(const Number& n) {
   if (!core_get()) {

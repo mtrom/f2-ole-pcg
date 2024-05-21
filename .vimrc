@@ -1,0 +1,1 @@
+home/scalable-mpc/.vimrc

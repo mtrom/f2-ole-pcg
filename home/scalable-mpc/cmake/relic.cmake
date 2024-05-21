@@ -1,1 +1,1 @@
-find_package(RELIC REQUIRED)
+find_package(relic REQUIRED)
