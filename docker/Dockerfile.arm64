@@ -149,3 +149,6 @@ RUN rm -f ~/.bash_logout
 
 WORKDIR /home/mpc-user
 CMD ["/bin/bash", "-l"]
+
+# ensures project build can find shared libraries
+ENV LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH

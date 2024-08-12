@@ -124,4 +124,8 @@ RUN rm -f ~/.bash_logout
 WORKDIR /home/mpc-user
 CMD ["/bin/bash", "-l"]
 
+# purely cosmetic
 ENV TERM xterm-256color
+
+# ensures project build can find shared libraries
+ENV LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH

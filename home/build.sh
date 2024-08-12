@@ -12,8 +12,7 @@ rm log4cpp-1.1.4.tar.gz
 (cd libscapi/; make)
 
 # build relic
-(cd relic/; cmake -DMULTI=PTHREAD . && make)
+(cd relic/; cmake -DMULTI=PTHREAD . && make && sudo make install)
 
 # build project
-export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
 (cd scalable-mpc/build; cmake .. && make)

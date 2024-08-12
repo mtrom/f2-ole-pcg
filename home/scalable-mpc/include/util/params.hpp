@@ -107,6 +107,10 @@ public:
       "[LPN::Dual]   " + dual.toString()
     );
   }
+
+  size_t numRandomOTs() const {
+    return 0;
+  }
 };
 
 class EncryptionParams {
