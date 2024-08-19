@@ -204,3 +204,31 @@ TEST(PRFTests, BitStringEvalSimilarInputsVeryDifferentOutputs) {
   // of course this will happen sometimes, but should hopefully be negligible
   EXPECT_GT(diffs.weight(), 4);
 }
+
+TEST(GaussianSamplerTests, Constructor) {
+  // just testing there is no exception
+  GaussianSampler sampler = GaussianSampler::getInstance();
+}
+
+TEST(GaussianSamplerTests, Sample) {
+  GaussianSampler sampler = GaussianSampler::getInstance();
+
+  std::vector<uint32_t> obs((2 * sampler.tail()) + 1);
+
+  for (size_t i = 0; i <= (1 << 16); i++) {
+    int observation = sampler.get();
+    obs[observation + sampler.tail()]++;
+  }
+  std::cout << std::endl;
+
+  uint32_t max = *std::max_element(obs.begin(), obs.end());
+
+  // it is hard to assert that the observed distribution is Gaussian, so instead the test
+  //  will print a visualization of the distribution and we will rely on human eye test.
+  for (int i = 0; i < obs.size(); i++) {
+    int observation = i - static_cast<int>(sampler.tail());
+    int result = static_cast<int>((static_cast<double>(obs[i]) / max) * 50);
+    std::cout << (observation >= 0 ? "    " : "   ") << observation << "\t| ";
+    std::cout << std::string(result, '#') << std::endl;
+  }
+}

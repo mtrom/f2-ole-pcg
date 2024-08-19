@@ -91,6 +91,7 @@ public:
   // comparison operators
   bool operator==(const BitString& other) const;
   bool operator!=(const BitString& other) const;
+  bool operator<(const BitString& other) const;
 
   // bitwise operators manipulating the underlying bytes
   BitString& operator^=(const BitString& other);

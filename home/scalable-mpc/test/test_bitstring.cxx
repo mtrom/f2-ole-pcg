@@ -79,6 +79,42 @@ TEST(BitStringTests, Compare) {
   EXPECT_NE(a, c);
 }
 
+TEST(BitStringTests, LessThan) {
+  BitString a("000000001010");
+  BitString b("000000001010");
+  BitString c("000000101010");
+  BitString d("000010111010");
+  BitString e("110110111010");
+  BitString f("111110111010");
+
+  EXPECT_FALSE(a < a);
+  EXPECT_FALSE(a < b);
+  EXPECT_LT(a, c);
+  EXPECT_LT(a, d);
+  EXPECT_LT(a, e);
+  EXPECT_LT(a, f);
+  EXPECT_FALSE(c < b);
+  EXPECT_FALSE(c < c);
+  EXPECT_LT(c, d);
+  EXPECT_LT(c, e);
+  EXPECT_LT(c, f);
+  EXPECT_FALSE(d < b);
+  EXPECT_FALSE(d < c);
+  EXPECT_FALSE(d < d);
+  EXPECT_LT(d, e);
+  EXPECT_LT(d, f);
+  EXPECT_FALSE(e < b);
+  EXPECT_FALSE(e < c);
+  EXPECT_FALSE(e < d);
+  EXPECT_FALSE(e < e);
+  EXPECT_LT(e, f);
+  EXPECT_FALSE(f < b);
+  EXPECT_FALSE(f < c);
+  EXPECT_FALSE(f < d);
+  EXPECT_FALSE(f < e);
+  EXPECT_FALSE(f < f);
+}
+
 TEST(BitStringTests, Xor) {
   BitString a(std::vector<unsigned char>({3, 234}));
   BitString b(std::vector<unsigned char>({89, 42}));

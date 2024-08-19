@@ -52,6 +52,25 @@ private:
   BitString cache;
 };
 
+// class to sample Gaussian noise for el gamal encryption
+class GaussianSampler {
+public:
+  // using a singleton so the config file is only read once
+  static GaussianSampler& getInstance() {
+    static GaussianSampler instance("gauss.config");
+    return instance;
+  }
+  int get();
+  uint32_t tail() { return this->_tail; }
+private:
+  GaussianSampler(std::string config_file);
+
+  uint32_t stddev;
+  uint32_t bits;
+  uint32_t _tail;
+  std::vector<BitString> cutoffs;
+};
+
 // uniformly sample a value less than `max`
 uint32_t sampleLessThan(uint32_t max);
 

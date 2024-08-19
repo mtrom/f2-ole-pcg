@@ -1,7 +1,11 @@
 #include "util/random.hpp"
 
 #include <algorithm>
+#include <fstream>
+#include <iostream>
+#include <sstream>
 
+#include <boost/filesystem.hpp>
 #include <openssl/bn.h>
 #include <openssl/evp.h>
 
@@ -174,4 +178,57 @@ BitString PRF<BitString>::operator()(std::pair<uint32_t, uint32_t> x, uint32_t m
   return this->operator()(
     BitString::fromUInt(x.first, 32) + BitString::fromUInt(x.second, 32), max
   );
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// GAUSSIAN SAMPLER
+////////////////////////////////////////////////////////////////////////////////
+
+GaussianSampler::GaussianSampler(std::string filename) {
+  boost::filesystem::path srcfn(__FILE__);
+  std::string fullpath = (srcfn.parent_path() / filename).string();
+  std::cout << "[GaussianSampler] reading config file at " << fullpath << std::endl;
+
+  std::ifstream file(fullpath);
+  if (!file.is_open()) {
+    throw std::runtime_error("[GaussianSampler] failure opening configuration file");
+  }
+
+  std::string line;
+
+  // first line is standard deviation / sigma value
+  if (std::getline(file, line)) {
+    this->stddev = std::stoi(line);
+  } else {
+    throw std::runtime_error("[GaussianSampler] failure in parsing configuration file");
+  }
+
+  // second line is the number of bits of uniform randomness needed per sample
+  if (std::getline(file, line)) {
+    this->bits = std::stoi(line);
+  } else {
+    throw std::runtime_error("[GaussianSampler] failure in parsing configuration file");
+  }
+
+  // probability weights for each possible observation
+  uint32_t total_weight = 0;
+  while (std::getline(file, line)) {
+    uint32_t weight = std::stoi(line);
+    total_weight += weight;
+    this->cutoffs.push_back(BitString::fromUInt(total_weight, this->bits));
+  }
+  this->_tail = this->cutoffs.size();
+}
+
+int GaussianSampler::get() {
+  // TODO: LAMBDA is more than we need here; connected to bug in BitString::sample()
+  BitString randomness = BitString::sample(LAMBDA);
+  BitString uniform_sample = randomness[{0, this->bits}];
+
+  int obs = 0;
+  for (; obs < this->cutoffs.size(); obs++) {
+    if (uniform_sample < this->cutoffs[obs]) { break; }
+  }
+
+  return (randomness[this->bits] ? -obs : obs);
 }

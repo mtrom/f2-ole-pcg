@@ -72,6 +72,19 @@ bool BitString::operator!=(const BitString& other) const {
   return !this->operator==(other);
 }
 
+bool BitString::operator<(const BitString& other) const {
+  if (this->size() != other.size()) {
+    throw std::runtime_error("[BitString::operator<] cannot compare bitstrings of different sizes");
+  }
+
+  for (int i = this->bytes.size() - 1; i >= 0; i--) {
+    if (this->bytes[i] == other.bytes[i])     { continue;     }
+    else if (this->bytes[i] < other.bytes[i]) { return true;  }
+    else                                      { return false; }
+  }
+  return false;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // ACCESS OPERATORS
 ////////////////////////////////////////////////////////////////////////////////
@@ -289,6 +302,9 @@ BitString BitString::reverse() const {
   return out;
 }
 
+// TODO: there appears to be a weird bug where this isn't uniform for some inputs of `size`
+//       try to reproduce with size = 9
+//       (100000001 comes up way to often and no other bitstrings end with a 1)
 BitString BitString::sample(size_t size) {
   // generate the output
   BIGNUM* bits = BN_new();
