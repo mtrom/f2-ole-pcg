@@ -27,6 +27,14 @@ TEST_F(AHETests, EncryptDecryptBitString) {
   }
 }
 
+TEST_F(AHETests, EncryptAllZeros) {
+  AHE encrypter;
+  BitString expected(128);
+  std::vector<AHE::Ciphertext> ciphertexts = encrypter.encrypt(expected);
+  BitString actual = encrypter.decrypt(ciphertexts);
+  EXPECT_EQ(expected, actual);
+}
+
 TEST_F(AHETests, CiphertextAddition) {
   AHE encrypter;
   for (uint64_t p0 = 0; p0 <= 1; p0++) {
@@ -52,6 +60,24 @@ TEST_F(AHETests, PlaintextAddition) {
       EXPECT_EQ(expected, actual);
     }
   }
+}
+
+TEST_F(AHETests, MultipleHomomorphicOperations) {
+  size_t OPERATIONS = 128;
+  AHE encrypter(OPERATIONS);
+
+  BitString bits = BitString::sample(OPERATIONS + 1);
+  std::vector<AHE::Ciphertext> ctxs = encrypter.encrypt(bits);
+
+  AHE::Ciphertext sum = ctxs[0];
+  for (size_t i = 1; i < ctxs.size(); i++) {
+    sum = encrypter.add(sum, ctxs[i]);
+  }
+
+  uint64_t expected = bits.weight() % 2;
+  uint64_t actual = encrypter.decrypt(sum);
+
+  EXPECT_EQ(expected, actual);
 }
 
 TEST_F(AHETests, SendAndReceive) {

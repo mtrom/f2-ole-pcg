@@ -15,7 +15,7 @@ public:
   using Ciphertext = std::pair<EC::Point, EC::Point>;
 
   // sample a random public & private key
-  AHE();
+  AHE(size_t max_ops = 1);
 
   // generic encrypt / decrypt
   Ciphertext encrypt(bool plaintext) const;
@@ -39,6 +39,9 @@ public:
 private:
   EC::Curve curve;
 
+  // maximum number of homomorphic operations supported
+  size_t max_ops;
+
   // El Gamal public & private keys (h = g^x)
   EC::Number x;
   EC::Point h;
@@ -48,4 +51,7 @@ private:
 
   // for hashing to curve
   PRF<BitString> prf;
+
+  // for sampling noise
+  GaussianSampler sampler;
 };

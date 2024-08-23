@@ -60,15 +60,21 @@ public:
     static GaussianSampler instance("gauss.config");
     return instance;
   }
-  int get();
-  uint32_t tail() { return this->_tail; }
+
+  uint32_t tail() const { return this->_tail; }
+
+  // sample a value; if `zero` is true then use the distribution around 0
+  //  otherwise use the distribution around p/2 (where p is the El Gamal prime)
+  int get(bool zero) const;
+
 private:
   GaussianSampler(std::string config_file);
 
   uint32_t stddev;
   uint32_t bits;
   uint32_t _tail;
-  std::vector<BitString> cutoffs;
+  std::vector<BitString> zero_dist;
+  std::vector<BitString> one_dist;
 };
 
 // uniformly sample a value less than `max`

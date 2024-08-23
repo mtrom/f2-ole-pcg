@@ -192,7 +192,7 @@ BitString Base::sendInnerProductTerm(
   std::shared_ptr<CommParty> channel,
   RandomOTSender rots
 ) const {
-  AHE ahe;
+  AHE ahe(this->params.primal.k);
   ahe.send(ahe.encrypt(this->s), channel);
   std::vector<AHE::Ciphertext> response = ahe.receive(this->params.primal.t, channel);
   BitString aXs = ahe.decrypt(response);
@@ -212,7 +212,7 @@ BitString Base::receiveInnerProductTerm(
   std::shared_ptr<CommParty> channel,
   RandomOTReceiver rots
 ) const {
-  AHE ahe;
+  AHE ahe(this->params.primal.k);
   std::vector<AHE::Ciphertext> s = ahe.receive(this->params.primal.k, channel);
 
   // my share of ⟨aᵢ,s⟩

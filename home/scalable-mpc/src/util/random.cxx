@@ -187,7 +187,6 @@ BitString PRF<BitString>::operator()(std::pair<uint32_t, uint32_t> x, uint32_t m
 GaussianSampler::GaussianSampler(std::string filename) {
   boost::filesystem::path srcfn(__FILE__);
   std::string fullpath = (srcfn.parent_path() / filename).string();
-  std::cout << "[GaussianSampler] reading config file at " << fullpath << std::endl;
 
   std::ifstream file(fullpath);
   if (!file.is_open()) {
@@ -210,25 +209,49 @@ GaussianSampler::GaussianSampler(std::string filename) {
     throw std::runtime_error("[GaussianSampler] failure in parsing configuration file");
   }
 
-  // probability weights for each possible observation
-  uint32_t total_weight = 0;
-  while (std::getline(file, line)) {
-    uint32_t weight = std::stoi(line);
-    total_weight += weight;
-    this->cutoffs.push_back(BitString::fromUInt(total_weight, this->bits));
+  // third line is the cutoff in the distribution tail
+  if (std::getline(file, line)) {
+    this->_tail = std::stoi(line);
+  } else {
+    throw std::runtime_error("[GaussianSampler] failure in parsing configuration file");
   }
-  this->_tail = this->cutoffs.size();
+
+  // probability weights for each possible observation in the zero distribution
+  for (uint32_t i = 0, total = 0; i < this->_tail; i++) {
+    if (!std::getline(file, line)) {
+      throw std::runtime_error("[GaussianSampler] config file too short");
+    }
+    total += std::stoi(line);
+    this->zero_dist.push_back(BitString::fromUInt(total, this->bits));
+  }
+
+  // probability weights for each possible observation in the one distribution
+  for (uint32_t i = 0, total = 0; i < this->_tail; i++) {
+    if (!std::getline(file, line)) {
+      throw std::runtime_error("[GaussianSampler] config file too short");
+    }
+    total += std::stoi(line);
+    this->one_dist.push_back(BitString::fromUInt(total, this->bits));
+  }
 }
 
-int GaussianSampler::get() {
+int GaussianSampler::get(bool zero) const {
   // TODO: LAMBDA is more than we need here; connected to bug in BitString::sample()
   BitString randomness = BitString::sample(LAMBDA);
   BitString uniform_sample = randomness[{0, this->bits}];
 
+  const std::vector<BitString>* dist = (zero ? &this->zero_dist : &this->one_dist);
+
   int obs = 0;
-  for (; obs < this->cutoffs.size(); obs++) {
-    if (uniform_sample < this->cutoffs[obs]) { break; }
+  for (; obs < dist->size(); obs++) {
+    if (uniform_sample < (*dist)[obs]) { break; }
   }
 
-  return (randomness[this->bits] ? -obs : obs);
+  // accounting for the end of the tail
+  if (obs == dist->size()) { obs--; }
+
+  // different because zero is symmetrical on 0 while one is not
+  if (randomness[this->bits] && zero) { return -obs; }
+  else if (randomness[this->bits])    { return -obs - 1; }
+  else                                { return obs; }
 }

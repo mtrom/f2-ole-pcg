@@ -6,9 +6,10 @@ extern "C" {
 #include <relic/relic_bn.h>
 }
 
-AHE::AHE() : prf(BitString::sample(LAMBDA)) {
+AHE::AHE(size_t max_ops)
+  : max_ops(max_ops), prf(BitString::sample(LAMBDA)), sampler(GaussianSampler::getInstance())
+{
   // randomly sample exponent & set public key
-  BitString seed = BitString::sample(LAMBDA);
   this->x.randomize();
   this->h = EC::Point::mulGenerator(this->x);
 
@@ -31,10 +32,19 @@ bool AHE::decrypt(AHE::Ciphertext ciphertext) const {
 
 std::vector<AHE::Ciphertext> AHE::encrypt(BitString plaintext) const {
   std::vector<AHE::Ciphertext> out;
+  EC::Number zero;
+  bn_zero(zero);
+
   for (size_t i = 0; i < plaintext.size(); i++) {
     BitString seed = this->prf(i, EC::Point::fromHashLength * 8);
     EC::Point c1 = EC::Point::fromHash(seed.data());
     EC::Point c2 = plaintext[i] ? (c1 * this->x) + this->one : (c1 * this->x);
+
+    // Gaussian noise around
+    int sampled = sampler.get(!plaintext[i]);
+    EC::Point noise = EC::Point::mulGenerator(zero + abs(sampled));
+    c2 = (sampled >= 0) ? c2 + noise : c2 - noise;
+
     out.push_back(std::make_pair(c1, c2));
   }
   return out;
@@ -65,14 +75,16 @@ AHE::Ciphertext AHE::multiply(AHE::Ciphertext c, uint64_t a) const {
 
 bool AHE::isZero(const EC::Point& point) const {
   // TODO: should this be precomputed?
-  // TODO: move 330 to a parameter
   EC::Number zero;
   bn_zero(zero);
-  EC::Point check = EC::Point::mulGenerator(zero);
+
+  EC::Point positives = EC::Point::mulGenerator(zero);
+  EC::Point negatives = EC::Point::mulGenerator(zero);
   EC::Point g = this->curve.getGenerator();
-  for (size_t i = 0; i < 330; i++) {
-    if (check == point) { return true; }
-    check += g;
+  for (size_t i = 0; i <= sampler.tail() * max_ops; i++) {
+    if (positives == point || negatives == point) { return true; }
+    positives += g;
+    negatives = negatives - g;
   }
   return false;
 }
