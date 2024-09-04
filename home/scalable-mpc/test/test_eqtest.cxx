@@ -145,3 +145,39 @@ TEST_F(EqTestTests, EqTestBatch) {
     }
   }
 }
+
+TEST_F(EqTestTests, EqTestNumOTs) {
+  const uint32_t length = 8;
+  const int threshold = 3;
+
+  const vector<uint32_t> slist({1294, 451, 5942, 925, 1612, 2969, 2574, 252});
+  const vector<uint32_t> rlist({1294, 294, 5942, 924, 1612, 2969, 226, 2562});
+
+  const int tests = slist.size();
+
+  uint32_t sbefore = this->srots.remaining();
+  uint32_t rbefore = this->rrots.remaining();
+
+  auto results = this->launch(
+    [&]() -> uint32_t {
+      EqTestSender sender(length, threshold, tests, this->sch, this->srots);
+      sender.init();
+      sender.run(slist);
+      return 0;
+    },
+    [&]() -> uint32_t {
+      EqTestReceiver receiver(length, threshold, tests, this->rch, this->rrots);
+      receiver.init();
+      receiver.run(rlist);
+      return 0;
+    }
+  );
+
+  uint32_t safter = this->srots.remaining();
+  uint32_t rafter = this->rrots.remaining();
+
+  uint32_t actual = EqTest::numOTs(length, threshold, tests);
+
+  EXPECT_EQ(sbefore - safter, actual);
+  EXPECT_EQ(rbefore - rafter, actual);
+}

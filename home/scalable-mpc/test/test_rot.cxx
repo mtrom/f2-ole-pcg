@@ -8,6 +8,19 @@
 
 class ROTTests : public NetworkTest { };
 
+TEST_F(ROTTests, GetPassByReference) {
+  auto get = [](RandomOTSender rot) -> void { rot.get(); };
+  size_t before = this->srots.remaining();
+  get(this->srots);
+  size_t after = this->srots.remaining();
+  EXPECT_EQ(before - 1, after);
+
+  auto reference = this->srots;
+  reference.get();
+  reference.get();
+  EXPECT_EQ(reference.remaining(), this->srots.remaining());
+}
+
 TEST_F(ROTTests, Run) {
   size_t total = 128;
 

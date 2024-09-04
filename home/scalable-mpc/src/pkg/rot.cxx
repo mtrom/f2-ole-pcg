@@ -10,12 +10,12 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 std::pair<BitString, BitString> RandomOTSender::get(size_t size) {
-  if (results.empty()) {
+  if (*this->first == *this->last) {
     throw std::out_of_range("[RandomOTSender::get] out of random ots");
   }
   BitString m0, m1;
-  std::tie(m0, m1) = results.back();
-  results.pop_back();
+  std::tie(m0, m1) = results->at(*this->first);
+  (*this->first)++;
 
   if (size < RandomOT::DEFAULT_ELEMENT_SIZE) {
     m0 = m0[{0, size}];
@@ -29,13 +29,13 @@ std::pair<BitString, BitString> RandomOTSender::get(size_t size) {
 }
 
 std::pair<bool, BitString> RandomOTReceiver::get(size_t size) {
-  if (results.empty()) {
+  if (*this->first == *this->last) {
     throw std::out_of_range("[RandomOTReceiver::get] out of random ots");
   }
   bool b;
   BitString mb;
-  std::tie(b, mb) = results.back();
-  results.pop_back();
+  std::tie(b, mb) = results->at(*this->first);
+  (*this->first)++;
 
   if (size < RandomOT::DEFAULT_ELEMENT_SIZE) {
     mb = mb[{0, size}];
@@ -59,14 +59,15 @@ void RandomOTSender::run(size_t total, std::shared_ptr<CommParty> channel, int p
   vector<byte> m1 = ((OTExtensionRandomizedSOutput*) output.get())->getR1Arr();
 
   for (size_t i = 0; i < m0.size(); i += RandomOT::DEFAULT_ELEMENT_SIZE / 8) {
-    this->results.push_back(
+    this->results->push_back(
       std::make_pair(
         BitString(m0.data() + i, RandomOT::DEFAULT_ELEMENT_SIZE),
         BitString(m1.data() + i, RandomOT::DEFAULT_ELEMENT_SIZE)
       )
     );
   }
-  this->total_ = total;
+  *this->first = 0;
+  *this->last = this->results->size();;
 }
 
 void RandomOTReceiver::run(size_t total, std::shared_ptr<CommParty> channel, int port) {
@@ -78,11 +79,12 @@ void RandomOTReceiver::run(size_t total, std::shared_ptr<CommParty> channel, int
   std::vector<byte> mb = ((OTOnByteArrayROutput*) output.get())->getXSigma();
 
   for (size_t i = 0, j = 0; j < mb.size(); i++, j += RandomOT::DEFAULT_ELEMENT_SIZE / 8) {
-    this->results.push_back(
+    this->results->push_back(
       std::make_pair(b[i], BitString(mb.data() + j, RandomOT::DEFAULT_ELEMENT_SIZE))
     );
   }
-  this->total_ = total;
+  *this->first = 0;
+  *this->last = this->results->size();;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -93,6 +95,10 @@ void RandomOTSender::transfer(
   std::vector<std::pair<BitString, BitString>> messages,
   std::shared_ptr<CommParty> channel
 ) {
+  if (messages.size() > this->remaining()) {
+    throw std::runtime_error("[RandomOTSender::transfer(std::vector, ...)] out of random ots");
+  }
+
   BitString swap(messages.size());
   channel->read(swap.data(), swap.nBytes());
 
@@ -116,6 +122,11 @@ std::vector<BitString> RandomOTReceiver::transfer(
     size_t mbits,
     std::shared_ptr<CommParty> channel
 ) {
+  if (choices.size() > this->remaining()) {
+    throw std::runtime_error(
+      "[RandomOTReceiver::transfer(BitString, size_t, ...)] out of random ots"
+    );
+  }
   std::vector<std::pair<bool, BitString>> reserved(choices.size());
   BitString swap(choices.size());
   for (size_t i = 0; i < choices.size(); i++) {
@@ -143,6 +154,12 @@ std::vector<BitString> RandomOTReceiver::transfer(
     std::vector<size_t> mbits,
     std::shared_ptr<CommParty> channel
 ) {
+  if (choices.size() > this->remaining()) {
+    throw std::runtime_error(
+      "[RandomOTReceiver::transfer(BitString, std::vector<size_t>, ...)] out of random ots"
+    );
+  }
+
   std::vector<std::pair<bool, BitString>> reserved(choices.size());
   BitString swap(choices.size());
   size_t total_size = 0;
@@ -172,6 +189,12 @@ std::vector<BitString> RandomOTReceiver::transfer(
 ////////////////////////////////////////////////////////////////////////////////
 
 void RandomOTSender::transfer(BitString m0, BitString m1, std::shared_ptr<CommParty> channel) {
+  if (m0.size() > this->remaining()) {
+    throw std::runtime_error(
+      "[RandomOTSender::transfer(BitString, BitString, ...)] out of random ots"
+    );
+  }
+
   BitString swap(m0.size());
   channel->read(swap.data(), swap.nBytes());
 
@@ -191,6 +214,12 @@ BitString RandomOTReceiver::transfer(
     BitString choices,
     std::shared_ptr<CommParty> channel
 ) {
+  if (choices.size() > this->remaining()) {
+    throw std::runtime_error(
+      "[RandomOTReceiver::transfer(BitString, ...)] out of random ots"
+    );
+  }
+
   std::vector<std::pair<bool, BitString>> reserved(choices.size());
   BitString swap(choices.size());
   for (size_t i = 0; i < choices.size(); i++) {

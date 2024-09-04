@@ -4,6 +4,15 @@
 
 #include "util/random.hpp"
 
+uint32_t EqTest::numOTs(uint32_t length, int threshold, size_t tests) {
+  uint32_t ots = 0;
+  for (size_t j = length; j > threshold; j = (size_t) ceil(log2(j + 1))) {
+    ots += (tests * j); // used in size reduction
+
+  }
+  return ots + ((1 << threshold) - 2) * tests; // used in product sharing
+}
+
 void EqTest::init() {
   for (size_t j = this->length; j > this->threshold; j = (size_t) ceil(log2(j + 1))) {
     this->sizeReduction(j);

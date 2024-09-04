@@ -126,7 +126,8 @@ protected:
 
 class PCG {
 public:
-  PCG(uint32_t id, const PCGParams& params) : id(id), sender(params), receiver(params) { }
+  PCG(uint32_t id, const PCGParams& params)
+    : id(id), params(params), sender(params), receiver(params) { }
 
   // run the pcg protocol with party `id` both has a sender and receiver
   std::pair<BitString, BitString> run(
@@ -135,8 +136,13 @@ public:
 
   // return the programmed inputs (as both sender and receiver)
   std::pair<BitString, BitString> inputs() const;
+
+  // required number of oblivious transfers based on the given parameters
+  size_t numOTs() const;
 private:
   uint32_t id;
+  PCGParams params;
+
   Sender sender;
   Receiver receiver;
 };

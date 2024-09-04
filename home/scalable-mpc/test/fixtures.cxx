@@ -27,7 +27,7 @@ protected:
   // mocked random ots
   RandomOTSender srots;
   RandomOTReceiver rrots;
-  const size_t ROTS = 1 << 14;
+  const size_t ROTS = 1 << 20;
 
   void SetUp() override {
     SocketPartyData sender(address::from_string("127.0.0.1"), TEST_BASE_PORT);
@@ -184,5 +184,22 @@ protected:
 
     out.push_back(sVOLE(delta_n, s_n, u_n));
     return out;
+  }
+
+  std::pair<RandomOTSender, RandomOTReceiver> mockRandomOTs(size_t correlations) {
+    std::vector<std::pair<BitString, BitString>> sender;
+    std::vector<std::pair<bool, BitString>> receiver;
+
+    BitString b = BitString::sample(correlations);
+    for (size_t i = 0; i < correlations; i++) {
+      BitString m0 = BitString::sample(RandomOTSender::DEFAULT_ELEMENT_SIZE);
+      BitString m1 = BitString::sample(RandomOTSender::DEFAULT_ELEMENT_SIZE);
+      BitString mb = b[i] ? m1 : m0;
+
+      sender.push_back(std::make_pair(m0, m1));
+      receiver.push_back(std::make_pair(b[i], mb));
+    }
+
+    return std::make_pair(RandomOTSender(sender), RandomOTReceiver(receiver));
   }
 };

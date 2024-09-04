@@ -32,6 +32,9 @@ public:
   virtual void productSharing() = 0;
   BitString run(std::vector<uint32_t> input);
 
+  // number of oblivious transfers required to run
+  static uint32_t numOTs(uint32_t length, int threshold, size_t tests);
+
   const bool sender;
   int length;
   int threshold;

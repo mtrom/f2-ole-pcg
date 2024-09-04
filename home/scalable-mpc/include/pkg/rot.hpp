@@ -1,9 +1,11 @@
 #pragma once
 
 #include <algorithm>
-#include <libscapi/include/comm/Comm.hpp>
+#include <memory>
 #include <stdexcept>
 #include <vector>
+
+#include <libscapi/include/comm/Comm.hpp>
 
 #include "util/bitstring.hpp"
 
@@ -13,8 +15,15 @@ public:
 
   static const size_t DEFAULT_ELEMENT_SIZE = 128;
 
-  RandomOT() : total_(0), results(0) { }
-  RandomOT(std::vector<T> ots) : total_(ots.size()), results(ots) { }
+  RandomOT()
+    : results(std::make_shared<std::vector<T>>(0)),
+      first(std::make_shared<size_t>(0)),
+      last(std::make_shared<size_t>(0)) { }
+
+  RandomOT(std::vector<T> ots)
+    : results(std::make_shared<std::vector<T>>(ots)),
+      first(std::make_shared<size_t>(0)),
+      last(std::make_shared<size_t>(ots.size())) { }
 
   // run the protocol to actually get the random ots
   virtual void run(size_t total, std::shared_ptr<CommParty> channel, int port) = 0;
@@ -22,34 +31,18 @@ public:
   // consume a single random ot with `size` bits and return it
   virtual T get(size_t size = DEFAULT_ELEMENT_SIZE) = 0;
 
-  // total number of ots in this object
-  size_t total() { return total_; }
-
   // number of ots remaining to be used
-  size_t remaining() { return results.size(); }
+  size_t remaining() { return *this->last - *this->first; }
 
 protected:
-  // total number requested in run()
-  size_t total_;
+  RandomOT(std::shared_ptr<std::vector<T>> results, size_t first, size_t last)
+    : results(results), first(std::make_shared<size_t>(first)), last(std::make_shared<size_t>(last)) { }
 
-  // remaining ot output
-  std::vector<T> results;
+  // actual random ot values
+  std::shared_ptr<std::vector<T>> results;
 
-  // used by subclasses
-  std::vector<T> reserve_(size_t n) {
-    if (n > this->remaining()) {
-      throw std::invalid_argument("[RandomOT::get] not enough ots remaining");
-    }
-
-    std::vector<T> out;
-    out.reserve(n);
-
-    // copy last `n` over to `out`
-    std::copy(results.end() - n, results.end(), std::back_inserter(out));
-    results.erase(results.end() - n, results.end());
-
-    return out;
-  }
+  // this object's range in the results vector
+  std::shared_ptr<size_t> first, last;
 };
 
 class RandomOTSender : public RandomOT<std::pair<BitString, BitString>> {
@@ -70,7 +63,14 @@ public:
 
   // reserve n ots in another object (e.g., to give to a threaded process)
   RandomOTSender reserve(size_t n) {
-    return RandomOTSender(RandomOT<std::pair<BitString, BitString>>::reserve_(n));
+    if (n > this->remaining()) {
+      throw std::invalid_argument("[RandomOTSender::reserve] not enough ots remaining");
+    }
+    size_t first = *this->first;
+    size_t last = *this->first + n;
+    *this->first += n;
+
+    return RandomOTSender(this->results, first, last);
   }
 };
 
@@ -100,7 +100,14 @@ public:
 
   // reserve n ots in another object (e.g., to give to a threaded process)
   RandomOTReceiver reserve(size_t n) {
-    return RandomOTReceiver(RandomOT<std::pair<bool, BitString>>::reserve_(n));
+    if (n > this->remaining()) {
+      throw std::invalid_argument("[RandomOTReceiver::reserve] not enough ots remaining");
+    }
+    size_t first = *this->first;
+    size_t last = *this->first + n;
+    *this->first += n;
+
+    return RandomOTReceiver(this->results, first, last);
   }
 };
 

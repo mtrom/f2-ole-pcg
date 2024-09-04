@@ -2,7 +2,8 @@ cmake_minimum_required(VERSION 3.10)
 
 # project details
 project(ScalableMPC VERSION 1.0)
-set(EXEC_NAME scalable_mpc)
+set(OFFLINE_EXEC offline)
+set(ONLINE_EXEC online)
 set(LIBRARY_NAME scalable_mpc_lib)
 
 # packages
@@ -63,9 +64,9 @@ target_link_libraries(${LIBRARY_NAME} PRIVATE
   gmp boost_system boost_thread boost_serialization pthread dl crypto ssl z)
 
 # add executables
-add_executable(${EXEC_NAME} src/cmd/main.cxx)
-target_link_libraries(${EXEC_NAME} PRIVATE ${LIBRARY_NAME})
-target_link_libraries(${EXEC_NAME} PRIVATE
+add_executable(${OFFLINE_EXEC} src/cmd/offline.cxx)
+target_link_libraries(${OFFLINE_EXEC} PRIVATE ${LIBRARY_NAME})
+target_link_libraries(${OFFLINE_EXEC} PRIVATE
   $ENV{HOME}/libscapi/libscapi.a
   $ENV{HOME}/libscapi/install/lib/libOTExtensionBristol.a
   $ENV{HOME}/libscapi/install/lib/libOTe.a
@@ -76,7 +77,7 @@ target_link_libraries(${EXEC_NAME} PRIVATE
 # properties
 set_target_properties(
   ${LIBRARY_NAME}
-  ${EXEC_NAME}
+  ${OFFLINE_EXEC}
     PROPERTIES
       CXX_STANDARD 14
       CXX_STANDARD_REQUIRED YES

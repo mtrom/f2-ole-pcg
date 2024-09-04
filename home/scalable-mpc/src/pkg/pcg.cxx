@@ -74,6 +74,20 @@ std::pair<BitString, BitString> PCG::inputs() const {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+// PCG GET OTs
+////////////////////////////////////////////////////////////////////////////////
+
+size_t PCG::numOTs() const {
+   return (
+     this->params.dual.t * ((size_t) ceil(log2(this->params.dual.N())) + 1)
+     + 3 * this->params.primal.t * ((size_t) ceil(log2(this->params.primal.blockSize())) + 1)
+     + EqTest::numOTs(
+         this->params.primal.errorBits(), this->params.eqTestThreshold, this->params.primal.t
+     )
+   );
+}
+
+////////////////////////////////////////////////////////////////////////////////
 // SENDER / RECEIVER CONSTRUCTORS
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -109,23 +123,37 @@ Receiver::Receiver(const PCGParams& params) : Base(params) {
 BitString Sender::run(
   std::shared_ptr<CommParty> channel, RandomOTSender srots, RandomOTReceiver rrots
 ) const {
+  BitString a = this->secretTensor(channel, srots);
+  BitString b = this->sendInnerProductTerm(channel, srots);
+  BitString c = this->receiveInnerProductTerm(channel, rrots);
+  BitString d = this->errorProduct(channel, srots);
+  return (a ^ b ^ c ^ d);
+  /*
   return (
     this->secretTensor(channel, srots)
     ^ this->sendInnerProductTerm(channel, srots)
     ^ this->receiveInnerProductTerm(channel, rrots)
     ^ this->errorProduct(channel, srots)
   );
+  */
 }
 
 BitString Receiver::run(
   std::shared_ptr<CommParty> channel, RandomOTSender srots, RandomOTReceiver rrots
 ) const {
+  BitString a = this->secretTensor(channel, rrots);
+  BitString b = this->receiveInnerProductTerm(channel, rrots);
+  BitString c = this->sendInnerProductTerm(channel, srots);
+  BitString d = this->errorProduct(channel, rrots);
+  return (a ^ b ^ c ^ d);
+  /*
   return (
     this->secretTensor(channel, rrots)
     ^ this->receiveInnerProductTerm(channel, rrots)
     ^ this->sendInnerProductTerm(channel, srots)
     ^ this->errorProduct(channel, rrots)
   );
+  */
 }
 
 BitString Base::lpnOutput() const {
