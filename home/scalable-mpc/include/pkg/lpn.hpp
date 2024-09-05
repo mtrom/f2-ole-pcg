@@ -80,6 +80,7 @@ protected:
 
 class PrimalMatrix : public SparseMatrix {
 public:
+  PrimalMatrix() : SparseMatrix(0, 0), key(0) { };
   PrimalMatrix(const BitString& key, const PrimalParams& params);
 
   // just samples a key and returns a matrix; mostly for testing
@@ -90,6 +91,7 @@ private:
 
 class DualMatrix : public DenseMatrix {
 public:
+  DualMatrix() : DenseMatrix(), key(0) { };
   DualMatrix(const BitString& key, const DualParams& params);
 
   // just samples a key and returns a matrix; mostly for testing

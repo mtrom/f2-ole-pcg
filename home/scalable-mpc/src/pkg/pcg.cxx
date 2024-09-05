@@ -7,6 +7,7 @@
 #include "pkg/pprf.hpp"
 #include "ahe/ahe.hpp"
 #include "util/defines.hpp"
+#include "util/timer.hpp"
 
 namespace Beaver {
 
@@ -74,7 +75,7 @@ std::pair<BitString, BitString> PCG::inputs() const {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// PCG GET OTs
+// PCG NUM OTs
 ////////////////////////////////////////////////////////////////////////////////
 
 size_t PCG::numOTs() const {
@@ -88,26 +89,38 @@ size_t PCG::numOTs() const {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// SENDER / RECEIVER CONSTRUCTORS
+// CONSTRUCTORS & INITIALIZING
 ////////////////////////////////////////////////////////////////////////////////
 
-Base::Base(const PCGParams& params)
-  : params(params), A(params.pkey, params.primal), H(params.dkey, params.dual)
+PCG::PCG(uint32_t id, const PCGParams& params)
+  : id(id), params(params), sender(params), receiver(params)
 {
-  this->B = this->A * this->H;
+  LPN::PrimalMatrix A(params.pkey, params.primal);
+  LPN::DualMatrix H(params.dkey, params.dual);
+  LPN::DenseMatrix B = A * H;
+
+  sender.loadPublicMatrices(A, H, B);
+  receiver.loadPublicMatrices(A, H, B);
+}
+
+Base::Base(const PCGParams& params) : params(params) {
   this->e = sampleVector(params.primal.t, params.primal.blockSize());
 }
 
 Sender::Sender(const PCGParams& params) : Base(params) {
-  // sample secret vector & regular errors
   this->s = BitString::sample(params.primal.k);
 }
 
 Receiver::Receiver(const PCGParams& params) : Base(params) {
-  // sample regular primal errors & dual errors
   this->epsilon = sampleDistinct(params.dual.t, params.dual.N());
+}
 
-  // set our s by computing Hε
+void Receiver::loadPublicMatrices(
+  LPN::PrimalMatrix A, LPN::DualMatrix H, LPN::DenseMatrix B
+) {
+  Base::loadPublicMatrices(A, H, B);
+
+  // also need to set s based on the H matrix
   this->s = BitString(params.primal.k);
   for (size_t i = 0; i < params.primal.k; i++) {
     for (uint32_t error : this->epsilon) {

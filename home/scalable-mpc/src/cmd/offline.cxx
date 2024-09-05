@@ -111,12 +111,13 @@ int main(int argc, char *argv[]) {
 
   try {
     options::store(options::parse_command_line(argc, argv, desc), vm);
-    options::notify(vm);
 
     if (vm.count("help")) {
       std::cout << desc << "\n";
       return 0;
     }
+
+    options::notify(vm);
 
     unsigned logN = vm["logN"].as<unsigned>();
     unsigned logk = vm["logk"].as<unsigned>();

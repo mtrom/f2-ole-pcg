@@ -61,6 +61,13 @@ class Base {
 public:
   Base(const PCGParams& params);
 
+  // initalize the public lpn instances
+  virtual void loadPublicMatrices(LPN::PrimalMatrix A, LPN::DualMatrix H, LPN::DenseMatrix B) {
+    this->A = A;
+    this->H = H;
+    this->B = B;
+  }
+
   // run the entire protocol and output the triples
   virtual BitString run(
     std::shared_ptr<CommParty> channel, RandomOTSender srots, RandomOTReceiver rrots
@@ -96,6 +103,13 @@ protected:
 class Sender : public Base {
 public:
   Sender(const PCGParams& params);
+
+  Sender(
+    const PCGParams& params, LPN::PrimalMatrix A, LPN::DualMatrix H, LPN::DenseMatrix B
+  ) : Sender(params) {
+    this->loadPublicMatrices(A, H, B);
+  }
+
   BitString run(
     std::shared_ptr<CommParty> channel, RandomOTSender srots, RandomOTReceiver rrots
   ) const override;
@@ -110,6 +124,14 @@ protected:
 class Receiver : public Base {
 public:
   Receiver(const PCGParams& params);
+  Receiver(
+    const PCGParams& params, LPN::PrimalMatrix A, LPN::DualMatrix H, LPN::DenseMatrix B
+  ) : Receiver(params) {
+    this->loadPublicMatrices(A, H, B);
+  }
+
+  void loadPublicMatrices(LPN::PrimalMatrix A, LPN::DualMatrix H, LPN::DenseMatrix B) override;
+
   BitString run(
     std::shared_ptr<CommParty> channel, RandomOTSender srots, RandomOTReceiver rrots
   ) const override;
@@ -126,8 +148,7 @@ protected:
 
 class PCG {
 public:
-  PCG(uint32_t id, const PCGParams& params)
-    : id(id), params(params), sender(params), receiver(params) { }
+  PCG(uint32_t id, const PCGParams& params);
 
   // run the pcg protocol with party `id` both has a sender and receiver
   std::pair<BitString, BitString> run(

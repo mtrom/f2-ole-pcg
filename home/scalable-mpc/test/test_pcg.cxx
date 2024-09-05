@@ -72,8 +72,13 @@ TEST_F(PCGTests, SecretTensor) {
     BitString::sample(LAMBDA), 1 << 6, 1 << 5, 1 << 3, 1 << 3,
     BitString::sample(LAMBDA), 4, 7
   );
-  Beaver::Sender sender(params);
-  Beaver::Receiver receiver(params);
+
+  LPN::PrimalMatrix A(params.pkey, params.primal);
+  LPN::DualMatrix H(params.dkey, params.dual);
+  LPN::DenseMatrix B = A * H;
+
+  Beaver::Sender sender(params, A, H, B);
+  Beaver::Receiver receiver(params, A, H, B);
 
   RandomOTSender srots;
   RandomOTReceiver rrots;
@@ -94,16 +99,13 @@ TEST_F(PCGTests, SecretTensor) {
   // figure out what the actual ⟨bᵢ⊗ aᵢ,ε ⊗ s⟩ term should be
   BitString expected(params.size);
 
-  LPN::PrimalMatrix A = sender.A;
-  LPN::DenseMatrix B = sender.B;
-  BitString s = sender.s;
-
   // reconstruct the epsilon vector with `params.dual.t` errors
   BitString epsilon(params.dual.N());
   for (size_t i = 0; i < params.dual.t; i++) {
     epsilon[receiver.epsilon[i]] = true;
   }
 
+  BitString s = sender.s;
   BitString eXs = epsilon.tensor(s);
   for (size_t i = 0; i < actual.size(); i++) {
     expected[i] = B[i].tensor(A[i]) * eXs;
@@ -118,8 +120,12 @@ TEST_F(PCGTests, InnerProduct) {
     BitString::sample(LAMBDA), 1 << 6, 1 << 5, 1 << 3, 1 << 3,
     BitString::sample(LAMBDA), 4, 7
   );
-  Beaver::Sender sender(params);
-  Beaver::Receiver receiver(params);
+  LPN::PrimalMatrix A(params.pkey, params.primal);
+  LPN::DualMatrix H(params.dkey, params.dual);
+  LPN::DenseMatrix B = A * H;
+
+  Beaver::Sender sender(params, A, H, B);
+  Beaver::Receiver receiver(params, A, H, B);
 
   RandomOTSender srots;
   RandomOTReceiver rrots;
@@ -138,15 +144,13 @@ TEST_F(PCGTests, InnerProduct) {
   BitString actual = results.first ^ results.second[0];
 
   // figure out what the actual ⟨aᵢ,s⟩ term should be
-  LPN::PrimalMatrix A = sender.A;
-  BitString s = sender.s;
-
   // reconstruct the primal error vector
   BitString e(params.primal.n);
   for (size_t i = 0; i < params.primal.t; i++) {
     e[(i * params.primal.blockSize()) + receiver.e[i]] = true;
   }
 
+  BitString s = sender.s;
   BitString aXs = A * s;
   BitString expected = aXs & e;
 
@@ -159,8 +163,13 @@ TEST_F(PCGTests, ErrorsProduct) {
     BitString::sample(LAMBDA), 1 << 11, 1 << 5, 1 << 3, 1 << 3,
     BitString::sample(LAMBDA), 1 << 2, 1 << 3
   );
-  Beaver::Sender sender(params);
-  Beaver::Receiver receiver(params);
+
+  LPN::PrimalMatrix A(params.pkey, params.primal);
+  LPN::DualMatrix H(params.dkey, params.dual);
+  LPN::DenseMatrix B = A * H;
+
+  Beaver::Sender sender(params, A, H, B);
+  Beaver::Receiver receiver(params, A, H, B);
 
   RandomOTSender srots;
   RandomOTReceiver rrots;
@@ -203,8 +212,14 @@ TEST_F(PCGTests, SenderReceiverRun) {
     BitString::sample(LAMBDA), 1 << 12, 1 << 7, 1 << 6, 1 << 3,
     BitString::sample(LAMBDA), 4, 7
   );
-  Beaver::Sender sender(params);
-  Beaver::Receiver receiver(params);
+
+  LPN::PrimalMatrix A(params.pkey, params.primal);
+  LPN::DualMatrix H(params.dkey, params.dual);
+  LPN::DenseMatrix B = A * H;
+
+  Beaver::Sender sender(params, A, H, B);
+  Beaver::Receiver receiver(params, A, H, B);
+
 
   size_t ots = (
     params.dual.t * ((size_t) ceil(log2(params.dual.N())) + 1)
