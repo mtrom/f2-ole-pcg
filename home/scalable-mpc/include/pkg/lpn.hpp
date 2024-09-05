@@ -1,6 +1,7 @@
 #pragma once
 
 #include <set>
+#include <memory>
 
 #include "util/bitstring.hpp"
 #include "util/params.hpp"
@@ -42,11 +43,12 @@ public:
 
   friend class SparseMatrix;
 protected:
-  // just sets up initial fields
-  DenseMatrix(size_t height, size_t width) : width(width), rows(height) { }
+  DenseMatrix(size_t height, size_t width)
+    : width(width), rows(std::make_shared<std::vector<BitString>>(height)) { }
 
+  // using shared pointer to prevent duplication in memory
+  std::shared_ptr<std::vector<BitString>> rows;
   size_t width;
-  std::vector<BitString> rows;
 };
 
 // matrix with a constant number of non-zero elements per row
@@ -59,7 +61,7 @@ public:
   BitString operator*(const BitString& other) const override;
 
   // directly get non-zero points
-  std::set<uint32_t> getNonZeroElements(size_t idx) const { return points[idx]; }
+  std::set<uint32_t> getNonZeroElements(size_t idx) const { return (*points)[idx]; }
 
   // matrix multiplication
   DenseMatrix operator*(const DenseMatrix& other) const;
@@ -70,12 +72,12 @@ public:
   friend class DenseMatrix;
 protected:
   // just sets up initial fields
-  SparseMatrix(size_t height, size_t width) : width(width), points(height) { }
+  SparseMatrix(size_t height, size_t width)
+    : width(width), points(std::make_shared<std::vector<std::set<uint32_t>>>(height)) { }
 
+  // all non-zero points (using shared pointer to prevent duplication in memory)
+  std::shared_ptr<std::vector<std::set<uint32_t>>> points;
   size_t width;
-
-  // all non-zero points
-  std::vector<std::set<uint32_t>> points;
 };
 
 class PrimalMatrix : public SparseMatrix {

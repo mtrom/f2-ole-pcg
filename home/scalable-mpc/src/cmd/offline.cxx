@@ -105,8 +105,8 @@ int main(int argc, char *argv[]) {
     ("l", options::value<unsigned>()->required(), "row weight for primal LPN matrix")
     ("c", options::value<unsigned>()->default_value(4), "compression rate of dual LPN")
     (
-      "logtd", options::value<unsigned>()->default_value(32),
-      "log of the dual LPN error vector weight"
+      "td", options::value<unsigned>()->default_value(32),
+      "dual LPN error vector weight"
     );
 
   try {
@@ -124,11 +124,11 @@ int main(int argc, char *argv[]) {
     unsigned logtp = vm["logtp"].as<unsigned>();
     unsigned l = vm["l"].as<unsigned>();
     unsigned c = vm["c"].as<unsigned>();
-    unsigned logtd = vm["logtd"].as<unsigned>();
+    unsigned td = vm["td"].as<unsigned>();
 
     PCGParams params(
       BitString::sample(LAMBDA), 1 << logN, 1 << logk, 1 << logtp, l,
-      BitString::sample(LAMBDA), c, 1 << logtd
+      BitString::sample(LAMBDA), c, td
     );
 
     run(params);
