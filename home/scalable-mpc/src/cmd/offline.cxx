@@ -34,11 +34,11 @@ void run(const PCGParams& params) {
     Channel channel = std::make_shared<CommPartyTCPSynced>(ios, asocket, bsocket);
     channel->join(COMM_SLEEP, COMM_TIMEOUT);
 
-    Timer setup("Setup");
+    Timer setup("[Offline] Offline Setup");
     Beaver::PCG pcg(0, params);
     setup.stop();
 
-    Timer ots("OT Ext");
+    Timer ots("[Offline] OT Extension");
     RandomOTSender sender;
     sender.run(pcg.numOTs(), channel, BASE_PORT + 2);
 
@@ -47,7 +47,7 @@ void run(const PCGParams& params) {
     ots.stop();
 
 
-    Timer run("PCG::run");
+    Timer run("[Offline] Online Phase");
     std::pair<BitString, BitString> output = pcg.run(1, channel, sender, receiver);
     run.stop();
 

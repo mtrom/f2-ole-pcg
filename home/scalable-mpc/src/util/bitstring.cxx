@@ -162,6 +162,15 @@ BitString& BitString::operator+=(const bool& bit) {
   return *this;
 }
 
+BitString BitString::concat(const std::vector<BitString> in) {
+  if (in.size() == 0) { return BitString(0); }
+  BitString out = in[0];
+  for (size_t i = 1; i < in.size(); i++) {
+    out += in[i];
+  }
+  return out;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // BITWISE OPERATORS
 ////////////////////////////////////////////////////////////////////////////////

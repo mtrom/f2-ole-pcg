@@ -2,7 +2,9 @@
 
 #include <algorithm>
 #include <iostream>
+#include <thread>
 
+#include "util/concurrency.hpp"
 #include "util/defines.hpp"
 #include "util/random.hpp"
 

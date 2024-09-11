@@ -345,6 +345,13 @@ TEST(BitStringTests, ConcatUInts) {
   EXPECT_EQ(ints[2], 2024);
 }
 
+TEST(BitStringTests, ConcatVector) {
+  std::vector<BitString> vector({
+    BitString("00"), BitString("0001"), BitString("0010"), BitString("001")
+  });
+  EXPECT_EQ(BitString::concat(vector), BitString("0000010010001"));
+}
+
 TEST(BitStringTests, ConstructFromPtr) {
   std::vector<unsigned char> bytes({0xAA, 0xBB, 0xCC});
   BitString a(bytes.data(), 8);

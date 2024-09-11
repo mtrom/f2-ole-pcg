@@ -2,10 +2,12 @@
 
 #include <cmath>
 #include <iostream>
+#include <thread>
 
+#include "ahe/ahe.hpp"
 #include "pkg/eqtest.hpp"
 #include "pkg/pprf.hpp"
-#include "ahe/ahe.hpp"
+#include "util/concurrency.hpp"
 #include "util/defines.hpp"
 #include "util/timer.hpp"
 
@@ -184,26 +186,28 @@ BitString Base::lpnOutput() const {
 BitString Base::secretTensorProcessing(std::vector<PPRF> pprfs) const {
   // arrange the ε ⊗ s matrix by columns
   std::vector<BitString> eXs(params.primal.k, BitString(params.dual.N()));
-  for (size_t c = 0; c < params.primal.k; c++) {
-    for (size_t r = 0; r < params.dual.N(); r++) {
-      for (size_t p = 0; p < params.dual.t; p++) {
-        eXs[c][r] ^= pprfs[p](r)[c];
+  MULTI_TASK([this, &eXs, &pprfs](size_t start, size_t end) {
+    for (size_t c = start; c < end; c++) {
+      for (size_t r = 0; r < params.dual.N(); r++) {
+        for (size_t p = 0; p < params.dual.t; p++) {
+          eXs[c][r] ^= pprfs[p](r)[c];
+        }
       }
     }
-  }
+  }, params.primal.k);
 
-  BitString out(params.size);
-  for (size_t i = 0; i < params.size; i++) {
-    BitString aXeXs;
-    for (uint32_t idx : A.getNonZeroElements(i)) {
-      if (aXeXs.size() == 0) { aXeXs = eXs[idx];  }
-      else                   { aXeXs ^= eXs[idx]; }
+  return TASK_REDUCE<BitString>([this, &eXs](size_t start, size_t end) {
+    BitString out(end - start);
+    for (size_t i = start; i < end; i++) {
+      BitString aXeXs;
+      for (uint32_t idx : this->A.getNonZeroElements(i)) {
+        if (aXeXs.size() == 0) { aXeXs = eXs[idx];  }
+        else                   { aXeXs ^= eXs[idx]; }
+      }
+      out[i - start] = this->B[i] * aXeXs;
     }
-
-    out[i] = B[i] * aXeXs;
-  }
-
-  return out;
+    return out;
+  }, BitString::concat, params.size);
 }
 
 BitString Sender::secretTensor(

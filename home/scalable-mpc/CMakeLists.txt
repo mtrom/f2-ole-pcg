@@ -42,6 +42,7 @@ set(SOURCES
   src/ahe/curve.cxx
   src/util/bitstring.cxx
   src/util/circuit.cxx
+  src/util/concurrency.cxx
   src/util/random.cxx
 )
 

@@ -87,6 +87,7 @@ public:
   BitString& operator+=(const BitString& other);
   BitString  operator+ (const BitString& other) const;
   BitString& operator+=(const bool& bit);
+  static BitString concat(const std::vector<BitString> in);
 
   // comparison operators
   bool operator==(const BitString& other) const;

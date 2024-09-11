@@ -1,6 +1,7 @@
 #include <sstream>
 
 #include "ahe/ahe.hpp"
+#include "util/concurrency.hpp"
 
 extern "C" {
 #include <relic/relic_bn.h>
@@ -31,33 +32,46 @@ bool AHE::decrypt(AHE::Ciphertext ciphertext) const {
 }
 
 std::vector<AHE::Ciphertext> AHE::encrypt(BitString plaintext) const {
-  std::vector<AHE::Ciphertext> out;
   EC::Number zero;
   bn_zero(zero);
 
-  for (size_t i = 0; i < plaintext.size(); i++) {
-    BitString seed = this->prf(i, EC::Point::fromHashLength * 8);
-    EC::Point c1 = EC::Point::fromHash(seed.data());
-    EC::Point c2 = plaintext[i] ? (c1 * this->x) + this->one : (c1 * this->x);
+  return TASK_REDUCE<std::vector<AHE::Ciphertext>>(
+    [this, &plaintext, &zero](size_t start, size_t end) {
+      EC::Curve curve; // initialize relic on the thread
+      std::vector<AHE::Ciphertext> out;
+      for (size_t i = start; i < end; i++) {
+        BitString seed = this->prf(i, EC::Point::fromHashLength * 8);
+        EC::Point c1 = EC::Point::fromHash(seed.data());
+        EC::Point c2 = plaintext[i] ? (c1 * this->x) + this->one : (c1 * this->x);
 
-    // Gaussian noise around
-    int sampled = sampler.get(!plaintext[i]);
-    EC::Point noise = EC::Point::mulGenerator(zero + abs(sampled));
-    c2 = (sampled >= 0) ? c2 + noise : c2 - noise;
+        // Gaussian noise around
+        int sampled = sampler.get(!plaintext[i]);
+        EC::Point noise = EC::Point::mulGenerator(zero + abs(sampled));
+        c2 = (sampled >= 0) ? c2 + noise : c2 - noise;
 
-    out.push_back(std::make_pair(c1, c2));
-  }
-  return out;
+        out.push_back(std::make_pair(c1, c2));
+      }
+      return out;
+    }, [](std::vector<std::vector<AHE::Ciphertext>> ciphertexts) {
+      std::vector<AHE::Ciphertext> out = ciphertexts[0];
+      for (size_t i = 1; i < ciphertexts.size(); i++) {
+        out.insert(out.end(), ciphertexts[i].begin(), ciphertexts[i].end());
+      }
+      return out;
+  }, plaintext.size());
 }
 
 BitString AHE::decrypt(std::vector<AHE::Ciphertext> ciphertexts) const {
-  BitString out(ciphertexts.size());
-  for (size_t i = 0; i < ciphertexts.size(); i++) {
-    EC::Point grx = ciphertexts[i].first * this->x;
-    EC::Point gb = ciphertexts[i].second - grx;
-    if (!this->isZero(gb)) { out[i] = true; }
-  }
-  return out;
+  return TASK_REDUCE<BitString>([this, &ciphertexts](size_t start, size_t end) {
+    EC::Curve curve; // initialize relic on the thread
+    BitString out(end - start);
+    for (size_t i = start; i < end; i++) {
+      EC::Point grx = ciphertexts[i].first * this->x;
+      EC::Point gb = ciphertexts[i].second - grx;
+      if (!this->isZero(gb)) { out[i - start] = true; }
+    }
+    return out;
+  }, BitString::concat, ciphertexts.size());
 }
 
 AHE::Ciphertext AHE::add(AHE::Ciphertext c1, AHE::Ciphertext c2) const {
