@@ -9,7 +9,7 @@ tar -xvzf log4cpp-1.1.4.tar.gz
 rm log4cpp-1.1.4.tar.gz
 
 # build libscapi
-(cd libscapi/; make)
+(cd libscapi/; make libs libscapi)
 
 # build relic
 (cd relic/; cmake -DMULTI=PTHREAD . && make && sudo make install)
