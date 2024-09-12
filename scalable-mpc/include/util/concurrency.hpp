@@ -17,6 +17,7 @@ const size_t THREAD_COUNT = []() {
     ? std::thread::hardware_concurrency()
     : DEFAULT_THREAD_COUNT
   );
+  count /= 2;
   std::cout << "[Info] using thread count " << count << std::endl;
   return count;
 }();

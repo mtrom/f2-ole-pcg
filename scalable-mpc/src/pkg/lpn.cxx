@@ -93,16 +93,18 @@ DenseMatrix SparseMatrix::operator*(const DenseMatrix& other) const {
   }
   DenseMatrix result((*this->points).size(), other.width);
 
-  for (size_t row = 0; row < (*this->points).size(); row++) {
-    (*result.rows)[row] = BitString(other.width);
-    for (size_t col = 0; col < other.width; col++) {
-      bool innerproduct = false;
-      for (uint32_t point : (*this->points)[row]) {
-        if (other[{point, col}]) { innerproduct = !innerproduct; }
+  MULTI_TASK([this, &other, &result](size_t start, size_t end) {
+    for (size_t row = start; row < end; row++) {
+      (*result.rows)[row] = BitString(other.width);
+      for (size_t col = 0; col < other.width; col++) {
+        bool innerproduct = false;
+        for (uint32_t point : (*this->points)[row]) {
+          if (other[{point, col}]) { innerproduct = !innerproduct; }
+        }
+        (*result.rows)[row][col] = innerproduct;
       }
-      (*result.rows)[row][col] = innerproduct;
     }
-  }
+  }, (*this->points).size());
 
   return result;
 }
@@ -136,11 +138,14 @@ PrimalMatrix::PrimalMatrix(const BitString& key, const PrimalParams& params)
   : SparseMatrix(params.n, params.k), key(key)
 {
   PRF<uint32_t> prf(key);
-  for (size_t i = 0; i < params.n; i++) {
-    for (size_t j = 0; (*this->points)[i].size() < params.l; j++) {
-      (*this->points)[i].insert(prf(std::make_pair(i, j), params.k));
+
+  MULTI_TASK([this, &prf, &params](size_t start, size_t end) {
+    for (size_t i = start; i < end; i++) {
+      for (size_t j = 0; (*this->points)[i].size() < params.l; j++) {
+        (*this->points)[i].insert(prf(std::make_pair(i, j), params.k));
+      }
     }
-  }
+  }, params.n);
 }
 
 PrimalMatrix PrimalMatrix::sample(const PrimalParams& params) {
@@ -155,9 +160,12 @@ DualMatrix::DualMatrix(const BitString& key, const DualParams& params)
   : DenseMatrix(params.n, params.N()), key(key)
 {
   PRF<BitString> prf(key);
-  for (size_t i = 0; i < params.n; i++) {
-    (*this->rows)[i] = prf(i, this->width);
-  }
+
+  MULTI_TASK([this, &prf, &params](size_t start, size_t end) {
+    for (size_t i = start; i < end; i++) {
+      (*this->rows)[i] = prf(i, this->width);
+    }
+  }, params.n);
 }
 
 DualMatrix DualMatrix::sample(const DualParams& params) {
