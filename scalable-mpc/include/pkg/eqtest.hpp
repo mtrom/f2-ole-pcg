@@ -4,6 +4,7 @@
 
 #include "pkg/rot.hpp"
 #include "util/bitstring.hpp"
+#include "util/defines.hpp"
 
 //
 /**
@@ -22,15 +23,16 @@
 class EqTest {
 public:
   EqTest(
-      bool sender, uint32_t length, int threshold, size_t tests,
-      std::shared_ptr<CommParty> channel
+      bool sender, uint32_t length, int threshold, size_t tests, Channel channel
   ) : sender(sender), length(length), threshold(threshold), tests(tests), channel(channel),
       rsi(tests), abi(tests), rs(tests), ab(tests) { }
 
-  void init();
   virtual void sizeReduction(uint32_t size) = 0;
   virtual void productSharing() = 0;
   BitString run(std::vector<uint32_t> input);
+  std::pair<BitString, BitString> run(
+    std::vector<uint32_t> in1, std::vector<uint32_t> in2
+  );
 
   // number of oblivious transfers required to run
   static uint32_t numOTs(uint32_t length, int threshold, size_t tests);

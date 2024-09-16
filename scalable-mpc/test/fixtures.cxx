@@ -27,7 +27,7 @@ protected:
   // mocked random ots
   RandomOTSender srots;
   RandomOTReceiver rrots;
-  const size_t ROTS = 1 << 20;
+  const size_t ROTS = 1 << 14;
 
   void SetUp() override {
     SocketPartyData sender(address::from_string("127.0.0.1"), TEST_BASE_PORT);

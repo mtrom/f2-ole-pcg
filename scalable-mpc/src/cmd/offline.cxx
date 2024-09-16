@@ -15,7 +15,9 @@
 #define BASE_PORT 3200
 #define COMM_SLEEP 500
 #define COMM_TIMEOUT 5000
-const uint32_t ALICE_ID = 0, BOB_ID = 1;
+#define ALICE_ID 0
+#define BOB_ID 1
+
 
 using address = boost::asio::ip::address;
 namespace options = boost::program_options;
@@ -35,20 +37,24 @@ void run(const PCGParams& params) {
     channel->join(COMM_SLEEP, COMM_TIMEOUT);
 
     Timer setup("[Offline] Offline Setup");
-    Beaver::PCG pcg(0, params);
+    Beaver::PCG pcg(ALICE_ID, params);
     setup.stop();
 
+
     Timer ots("[Offline] OT Extension");
+    size_t srots, rrots;
+    std::tie(srots, rrots) = pcg.numOTs(BOB_ID);
+
     RandomOTSender sender;
-    sender.run(pcg.numOTs(), channel, BASE_PORT + 2);
+    sender.run(srots, channel, BASE_PORT + 2);
 
     RandomOTReceiver receiver;
-    receiver.run(pcg.numOTs(), channel, BASE_PORT + 2);
+    receiver.run(rrots, channel, BASE_PORT + 2);
     ots.stop();
 
 
     Timer run("[Offline] Online Phase");
-    std::pair<BitString, BitString> output = pcg.run(1, channel, sender, receiver);
+    std::pair<BitString, BitString> output = pcg.run(BOB_ID, channel, sender, receiver);
     run.stop();
 
     float upload = (float) channel->bytesIn / 1000000;
@@ -66,15 +72,18 @@ void run(const PCGParams& params) {
     Channel channel = std::make_shared<CommPartyTCPSynced>(ios, bsocket, asocket);
     channel->join(COMM_SLEEP, COMM_TIMEOUT);
 
-    Beaver::PCG pcg(1, params);
+    Beaver::PCG pcg(BOB_ID, params);
+
+    size_t srots, rrots;
+    std::tie(srots, rrots) = pcg.numOTs(ALICE_ID);
 
     RandomOTReceiver receiver;
-    receiver.run(pcg.numOTs(), channel, BASE_PORT + 2);
+    receiver.run(rrots, channel, BASE_PORT + 2);
 
     RandomOTSender sender;
-    sender.run(pcg.numOTs(), channel, BASE_PORT + 2);
+    sender.run(srots, channel, BASE_PORT + 2);
 
-    std::pair<BitString, BitString> output = pcg.run(0, channel, sender, receiver);
+    std::pair<BitString, BitString> output = pcg.run(ALICE_ID, channel, sender, receiver);
     std::pair<BitString, BitString> inputs = pcg.inputs();
 
     return std::make_tuple(inputs.first, inputs.second, output.first, output.second);

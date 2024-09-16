@@ -129,17 +129,6 @@ TEST_F(PPRFTests, CompressedAndPuncturedSameOutput) {
   }
 }
 
-TEST_F(PPRFTests, Image) {
-  BitString key = BitString::sample(LAMBDA);
-
-  PPRF pprf(key, 1, LAMBDA);
-  BitString image = pprf.image();
-
-  for (size_t i = 0; i < LAMBDA; i++) {
-    EXPECT_EQ(pprf(i)[0], image[i]);
-  }
-}
-
 TEST_F(PPRFTests, SendAndReceive) {
   const size_t x = 3;
 
@@ -226,36 +215,6 @@ TEST_F(PPRFTests, SendAndReceiveExpanded) {
   }
 }
 
-TEST_F(PPRFTests, SendAndReceiveDPF) {
-  const size_t x = 3;
-  const size_t outsize = 1;
-
-  shared_ptr<CommParty> sch = this->sch;
-  RandomOTSender srots = this->srots;
-
-  BitString payload = BitString::fromUInt(1, 1);
-  PPRF sender(BitString::sample(LAMBDA), outsize, LAMBDA);
-
-  auto results = this->launch(
-    [&]() -> bool {
-      PPRF::send(sender, payload, this->sch, this->srots);
-      return true;
-    },
-    [&]() -> PPRF {
-      return PPRF::receive(x, LAMBDA, outsize, LAMBDA, this->rch, this->rrots);
-    }
-  );
-  PPRF receiver = results.second;
-
-  ASSERT_EQ(receiver.domain(), sender.domain());
-
-  for (size_t i = 0; i < LAMBDA; i++) {
-    BitString share = sender(i) ^ receiver(i);
-    ASSERT_EQ(share.size(), 1);
-    EXPECT_EQ(share[0], i == x);
-  }
-}
-
 TEST_F(PPRFTests, SendAndReceiveBatched) {
   const size_t batchsize = LAMBDA;
   const size_t outsize = LAMBDA;
@@ -327,27 +286,48 @@ TEST_F(PPRFTests, SendAndReceiveBatchedSinglePayload) {
   }
 }
 
-TEST_F(PPRFTests, SendAndReceiveBatchedDPF) {
+TEST_F(PPRFTests, DPFSample) {
+  const size_t N = 16;
+  std::vector<DPF> dpfs = DPF::sample(N, LAMBDA, LAMBDA);
+
+  for (size_t i = 0; i < N; i++) {
+    for (size_t j = 1; j < LAMBDA; j++) {
+      EXPECT_EQ(dpfs[i](j).size(), 1);
+    }
+  }
+}
+
+TEST_F(PPRFTests, Image) {
+  BitString key = BitString::sample(LAMBDA);
+
+  DPF dpf(key, LAMBDA);
+  BitString image = dpf.image();
+
+  for (size_t i = 0; i < LAMBDA; i++) {
+    EXPECT_EQ(dpf(i)[0], image[i]);
+  }
+}
+
+
+TEST_F(PPRFTests, DPFSendAndReceive) {
   const size_t batchsize = LAMBDA;
-  const size_t outsize = 1;
 
   std::vector<uint32_t> points = sampleVector(batchsize, LAMBDA);
   BitString payloads = BitString::sample(batchsize);
-  std::vector<PPRF> sender = PPRF::sample(batchsize, LAMBDA, outsize, LAMBDA);
+  std::vector<DPF> sender = DPF::sample(batchsize, LAMBDA, LAMBDA);
 
   auto results = this->launch(
     [&]() -> bool {
-      PPRF::sendDPFs(sender, payloads, this->sch, this->srots);
+      DPF::send(sender, payloads, this->sch, this->srots);
       return true;
     },
-    [&]() -> std::vector<PPRF> {
-      return PPRF::receive(
-          points, LAMBDA, outsize, LAMBDA, this->rch, this->rrots
+    [&]() -> std::vector<DPF> {
+      return DPF::receive(
+          points, LAMBDA, LAMBDA, this->rch, this->rrots
       );
-
     }
   );
-  std::vector<PPRF> receiver = results.second;
+  std::vector<DPF> receiver = results.second;
 
   for (size_t i = 0; i < batchsize; i++) {
     ASSERT_EQ(receiver[i].domain(), sender[i].domain());

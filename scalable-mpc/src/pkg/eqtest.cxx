@@ -1,6 +1,7 @@
 #include "pkg/eqtest.hpp"
 
 #include <cmath>
+#include <boost/range/join.hpp>
 
 #include "util/random.hpp"
 
@@ -13,18 +14,24 @@ uint32_t EqTest::numOTs(uint32_t length, int threshold, size_t tests) {
   return ots + ((1 << threshold) - 2) * tests; // used in product sharing
 }
 
-void EqTest::init() {
+BitString EqTest::run(std::vector<uint32_t> inputs) {
+  return run(inputs, std::vector<uint32_t>()).first;
+}
+
+std::pair<BitString, BitString> EqTest::run(
+  std::vector<uint32_t> in1, std::vector<uint32_t> in2
+) {
+  // we've preparing for exactly `tests` inputs
+  assert((in1.size() + in2.size()) == this->tests);
+
   for (size_t j = this->length; j > this->threshold; j = (size_t) ceil(log2(j + 1))) {
     this->sizeReduction(j);
   }
   this->productSharing();
-}
 
-BitString EqTest::run(std::vector<uint32_t> inputs) {
-  // we've prepared for exactly `tests` inputs
-  assert(inputs.size() == this->tests);
+  auto inputs = boost::join(in1, in2);
 
-  std::vector<BitString> reduced(inputs.size());
+  std::vector<BitString> reduced(this->tests);
   for (size_t t = 0; t < this->tests; t++) {
     reduced[t] = BitString::fromUInt(inputs[t], this->length);
   }
@@ -109,23 +116,39 @@ BitString EqTest::run(std::vector<uint32_t> inputs) {
     channel->write(alpha.data(), alpha.nBytes());
   }
 
-  // assemble output
-  BitString output(inputs.size());
-  for (size_t t = 0; t < this->tests; t++) {
-    output[t] = true;
+  // assemble output for both inputs
+  BitString out1(in1.size());
+  BitString out2(in2.size());
+
+  for (size_t t = 0; t < out1.size(); t++) {
+    out1[t] = true;
     for (size_t l = 0; l < this->threshold; l++) {
-      output[t] &= sender ? true ^ reduced[t][l] : reduced[t][l];
+      out1[t] &= sender ? true ^ reduced[t][l] : reduced[t][l];
     }
     // start bit for this input's beta
     size_t startbit = t * ((1 << this->threshold) - 2);
 
     for (size_t k = 0; k < (1 << this->threshold) - 2; k++) {
-      output[t] ^= ab[t][k] ^ (beta[startbit + k] & (sender ? X[t][k] : rs[t][k]));
+      out1[t] ^= ab[t][k] ^ (beta[startbit + k] & (sender ? X[t][k] : rs[t][k]));
     }
-    output[t] ^= alpha[rbits + t] ^ beta[rbits + t];
+    out1[t] ^= alpha[rbits + t] ^ beta[rbits + t];
   }
 
-  return output;
+  for (size_t t = out1.size(); t < this->tests; t++) {
+    out2[t - out1.size()] = true;
+    for (size_t l = 0; l < this->threshold; l++) {
+      out2[t - out1.size()] &= sender ? true ^ reduced[t][l] : reduced[t][l];
+    }
+    // start bit for this input's beta
+    size_t startbit = t * ((1 << this->threshold) - 2);
+
+    for (size_t k = 0; k < (1 << this->threshold) - 2; k++) {
+      out2[t - out1.size()] ^= ab[t][k] ^ (beta[startbit + k] & (sender ? X[t][k] : rs[t][k]));
+    }
+    out2[t - out1.size()] ^= alpha[rbits + t] ^ beta[rbits + t];
+  }
+
+  return std::make_pair(out1, out2);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

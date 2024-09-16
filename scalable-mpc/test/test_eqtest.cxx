@@ -69,12 +69,10 @@ TEST_F(EqTestTests, EqTestSingleTrue) {
   auto results = this->launch(
     [&]() -> BitString {
       EqTestSender sender(length, threshold, tests, this->sch, this->srots);
-      sender.init();
       return sender.run(std::vector<uint32_t>({value}));
     },
     [&]() -> BitString {
       EqTestReceiver receiver(length, threshold, tests, this->rch, this->rrots);
-      receiver.init();
       return receiver.run(std::vector<uint32_t>({value}));
     }
   );
@@ -96,12 +94,10 @@ TEST_F(EqTestTests, EqTestSingleFalse) {
   auto results = this->launch(
     [&]() -> BitString {
       EqTestSender sender(length, threshold, tests, this->sch, this->srots);
-      sender.init();
       return sender.run(std::vector<uint32_t>({2404}));
     },
     [&]() -> BitString {
       EqTestReceiver receiver(length, threshold, tests, this->rch, this->rrots);
-      receiver.init();
       return receiver.run(std::vector<uint32_t>({593}));
     }
   );
@@ -124,12 +120,10 @@ TEST_F(EqTestTests, EqTestBatch) {
   auto results = this->launch(
     [&]() -> BitString {
       EqTestSender sender(length, threshold, tests, this->sch, this->srots);
-      sender.init();
       return sender.run(slist);
     },
     [&]() -> BitString {
       EqTestReceiver receiver(length, threshold, tests, this->rch, this->rrots);
-      receiver.init();
       return receiver.run(rlist);
     }
   );
@@ -161,13 +155,11 @@ TEST_F(EqTestTests, EqTestNumOTs) {
   auto results = this->launch(
     [&]() -> uint32_t {
       EqTestSender sender(length, threshold, tests, this->sch, this->srots);
-      sender.init();
       sender.run(slist);
       return 0;
     },
     [&]() -> uint32_t {
       EqTestReceiver receiver(length, threshold, tests, this->rch, this->rrots);
-      receiver.init();
       receiver.run(rlist);
       return 0;
     }

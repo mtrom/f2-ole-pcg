@@ -55,17 +55,6 @@ void PPRF::compress() {
   this->tree.erase(this->tree.begin(), this->tree.begin() + (1 << this->depth) - 1);
 }
 
-BitString PPRF::image() const {
-  if (this->outsize != 1) {
-    throw std::logic_error("[PPRF::image] cannot get image on non-binary functions");
-  }
-  BitString out(this->domainsize);
-  for (uint32_t i = 0; i < this->domainsize; i++) {
-    out[i] = this->operator()(i)[0];
-  }
-  return out;
-}
-
 std::string PPRF::toString() const {
   std::string out = "";
 
@@ -226,35 +215,6 @@ void PPRF::send(
   rots.transfer(messages, channel);
 }
 
-void PPRF::sendDPFs(
-    std::vector<PPRF> pprfs, BitString payloads,
-    std::shared_ptr<CommParty> channel, RandomOTSender rots
-) {
-  std::vector<std::pair<BitString, BitString>> messages;
-  for (size_t i = 0; i < pprfs.size(); i++) {
-    if (pprfs[i].outsize != 1) {
-      throw std::invalid_argument(
-        "[PPRF::sendDPFs] pprf does not have binary output"
-      );
-    }
-
-    // for each level the messages are the left and right nodes xor'd
-    for (size_t d = 1; d <= pprfs[i].depth; d++) {
-      messages.push_back(pprfs[i].getLevelXORd(d));
-    }
-
-    // xor the final messages with the payload
-    std::pair<BitString, BitString> leafs = pprfs[i].getLevelXORd(pprfs[i].depth);
-    leafs.first[0] ^= payloads[i];
-    leafs.second[0] ^= payloads[i];
-    messages.push_back(leafs);
-  }
-
-  // do the oblivious transfer
-  rots.transfer(messages, channel);
-}
-
-
 std::vector<PPRF> PPRF::receive(
     std::vector<uint32_t> points, size_t keysize, size_t outsize, size_t domainsize,
     std::shared_ptr<CommParty> channel, RandomOTReceiver rots
@@ -290,6 +250,86 @@ std::vector<PPRF> PPRF::receive(
   }
 
   return pprfs;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// DPF / D2PF SPECIFIC FUNCTIONS
+////////////////////////////////////////////////////////////////////////////////
+
+std::vector<DPF> DPF::sample(size_t n, size_t keysize, size_t domainsize) {
+  std::vector<DPF> dpfs;
+  dpfs.reserve(n);
+  for (size_t i = 0; i < n; i++) {
+    dpfs.push_back(DPF(BitString::sample(keysize), domainsize));
+  }
+  return dpfs;
+}
+
+BitString DPF::image() const {
+  BitString out(this->domainsize);
+  for (uint32_t i = 0; i < this->domainsize; i++) {
+    out[i] = this->operator()(i)[0];
+  }
+  return out;
+}
+
+void DPF::send(
+    std::vector<DPF> dpfs, BitString payloads,
+    std::shared_ptr<CommParty> channel, RandomOTSender rots
+) {
+  std::vector<std::pair<BitString, BitString>> messages;
+  for (size_t i = 0; i < dpfs.size(); i++) {
+    // for each level the messages are the left and right nodes xor'd
+    for (size_t d = 1; d <= dpfs[i].depth; d++) {
+      messages.push_back(dpfs[i].getLevelXORd(d));
+    }
+
+    // xor the final messages with the payload
+    std::pair<BitString, BitString> leafs = dpfs[i].getLevelXORd(dpfs[i].depth);
+    leafs.first[0] ^= payloads[i];
+    leafs.second[0] ^= payloads[i];
+    messages.push_back(leafs);
+  }
+
+  // do the oblivious transfer
+  rots.transfer(messages, channel);
+}
+
+std::vector<DPF> DPF::receive(
+    std::vector<uint32_t> points, size_t keysize, size_t domainsize,
+    std::shared_ptr<CommParty> channel, RandomOTReceiver rots
+) {
+  size_t depth = (size_t) ceil(log2(domainsize));
+  BitString choices;
+
+  std::vector<size_t> sizes;
+
+  for (const size_t& x : points) {
+    // want the sibling nodes for the path to `x`
+    choices += BitString::fromUInt(~x, depth).reverse();
+
+    // except the payload which should be the punctured leaf node
+    choices += (!choices[choices.size() - 1]);
+
+    // most of the ots are `keysize`-bit but the last two are bits for the leaf layer
+    std::vector<size_t> branches(depth - 1, keysize);
+    sizes.insert(sizes.end(), branches.begin(), branches.end());
+    sizes.insert(sizes.end(), {1, 1});
+  }
+
+  // do the oblivious transfer
+  std::vector<BitString> allkeys = rots.transfer(choices, sizes, channel);
+
+  std::vector<DPF> dpfs;
+  for (size_t i = 0; i < points.size(); i++) {
+    std::vector<BitString> keys(
+      allkeys.begin() + i * (depth + 1),
+      allkeys.begin() + (i + 1) * (depth + 1)
+    );
+    dpfs.push_back(DPF(keys, points[i]));
+  }
+
+  return dpfs;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

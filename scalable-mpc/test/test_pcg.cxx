@@ -4,6 +4,7 @@
 #define protected public
 #define private public
 
+#include "ahe/ahe.hpp"
 #include "pkg/eqtest.hpp"
 #include "pkg/pcg.hpp"
 #include "./fixtures.cxx"
@@ -67,187 +68,6 @@ TEST_F(PCGTests, Transform) {
   }
 }
 
-TEST_F(PCGTests, SecretTensor) {
-  PCGParams params(
-    BitString::sample(LAMBDA), 1 << 6, 1 << 5, 1 << 3, 1 << 3,
-    BitString::sample(LAMBDA), 4, 7
-  );
-
-  LPN::PrimalMatrix A(params.pkey, params.primal);
-  LPN::DualMatrix H(params.dkey, params.dual);
-  LPN::DenseMatrix B = A * H;
-
-  Beaver::Sender sender(params, A, H, B);
-  Beaver::Receiver receiver(params, A, H, B);
-
-  RandomOTSender srots;
-  RandomOTReceiver rrots;
-  std::tie(srots, rrots) = this->mockRandomOTs(
-    2 * (params.dual.t * ((size_t) ceil(log2(params.dual.N()))))
-  );
-
-  auto results = this->launch(
-    [&](std::vector<Channel> channels) -> BitString {
-      return sender.secretTensor(channels[0], srots);
-    },
-    [&](int _, Channel channel) -> BitString {
-      return receiver.secretTensor(channel, rrots);
-    }
-  );
-  BitString actual = results.first ^ results.second[0];
-
-  // figure out what the actual ⟨bᵢ⊗ aᵢ,ε ⊗ s⟩ term should be
-  BitString expected(params.size);
-
-  // reconstruct the epsilon vector with `params.dual.t` errors
-  BitString epsilon(params.dual.N());
-  for (size_t i = 0; i < params.dual.t; i++) {
-    epsilon[receiver.epsilon[i]] = true;
-  }
-
-  BitString s = sender.s;
-  BitString eXs = epsilon.tensor(s);
-  for (size_t i = 0; i < actual.size(); i++) {
-    expected[i] = B[i].tensor(A[i]) * eXs;
-  }
-
-  ASSERT_EQ(expected.size(), actual.size());
-  ASSERT_EQ(expected, actual);
-}
-
-TEST_F(PCGTests, InnerProduct) {
-  PCGParams params(
-    BitString::sample(LAMBDA), 1 << 6, 1 << 5, 1 << 3, 1 << 3,
-    BitString::sample(LAMBDA), 4, 7
-  );
-  LPN::PrimalMatrix A(params.pkey, params.primal);
-  LPN::DualMatrix H(params.dkey, params.dual);
-  LPN::DenseMatrix B = A * H;
-
-  Beaver::Sender sender(params, A, H, B);
-  Beaver::Receiver receiver(params, A, H, B);
-
-  RandomOTSender srots;
-  RandomOTReceiver rrots;
-  std::tie(srots, rrots) = this->mockRandomOTs(
-    2 * (params.primal.t * ((size_t) ceil(log2(params.primal.blockSize()))))
-  );
-
-  auto results = this->launch(
-    [&](std::vector<Channel> channels) -> BitString {
-      return sender.sendInnerProductTerm(channels[0], srots);
-    },
-    [&](int _, Channel channel) -> BitString {
-      return receiver.receiveInnerProductTerm(channel, rrots);
-    }
-  );
-  BitString actual = results.first ^ results.second[0];
-
-  // figure out what the actual ⟨aᵢ,s⟩ term should be
-  // reconstruct the primal error vector
-  BitString e(params.primal.n);
-  for (size_t i = 0; i < params.primal.t; i++) {
-    e[(i * params.primal.blockSize()) + receiver.e[i]] = true;
-  }
-
-  BitString s = sender.s;
-  BitString aXs = A * s;
-  BitString expected = aXs & e;
-
-  ASSERT_EQ(expected.size(), actual.size());
-  ASSERT_EQ(expected.toString(), actual.toString());
-}
-
-TEST_F(PCGTests, ErrorsProduct) {
-  PCGParams params(
-    BitString::sample(LAMBDA), 1 << 11, 1 << 5, 1 << 3, 1 << 3,
-    BitString::sample(LAMBDA), 1 << 2, 1 << 3
-  );
-
-  LPN::PrimalMatrix A(params.pkey, params.primal);
-  LPN::DualMatrix H(params.dkey, params.dual);
-  LPN::DenseMatrix B = A * H;
-
-  Beaver::Sender sender(params, A, H, B);
-  Beaver::Receiver receiver(params, A, H, B);
-
-  RandomOTSender srots;
-  RandomOTReceiver rrots;
-  std::tie(srots, rrots) = this->mockRandomOTs(
-    params.primal.t * ((size_t) ceil(log2(params.primal.blockSize())) + 1)
-    + EqTest::numOTs(params.primal.errorBits(), params.eqTestThreshold, params.primal.t)
-  );
-
-  // set errors explicitly so we can be sure of some equalities
-  sender.e = std::vector<uint32_t>{26, 9, 59, 71, 18, 87, 17, 89};
-  receiver.e = std::vector<uint32_t>{44, 9, 70, 65, 87, 74, 28, 89};
-
-  auto results = this->launch(
-    [&](std::vector<Channel> channels) -> BitString {
-      return sender.errorProduct(channels[0], srots);
-    },
-    [&](int _, Channel channel) -> BitString {
-      return receiver.errorProduct(channel, rrots);
-    }
-  );
-  BitString sout = results.first;
-  BitString rout = results.second[0];
-
-  ASSERT_EQ(sout.size(), params.size);
-  ASSERT_EQ(rout.size(), params.size);
-
-  for (size_t i = 0, k = 0 ; i < params.primal.t; i++) {
-    for (size_t j = 0; j < params.primal.blockSize(); j++, k++) {
-      if (j == sender.e[i] && sender.e[i] == receiver.e[i]) {
-        ASSERT_EQ(sout[k] ^ rout[k], true);
-      } else {
-        ASSERT_EQ(sout[k] ^ rout[k], false);
-      }
-    }
-  }
-}
-
-TEST_F(PCGTests, SenderReceiverRun) {
-  PCGParams params(
-    BitString::sample(LAMBDA), 1 << 12, 1 << 7, 1 << 6, 1 << 3,
-    BitString::sample(LAMBDA), 4, 7
-  );
-
-  LPN::PrimalMatrix A(params.pkey, params.primal);
-  LPN::DualMatrix H(params.dkey, params.dual);
-  LPN::DenseMatrix B = A * H;
-
-  Beaver::Sender sender(params, A, H, B);
-  Beaver::Receiver receiver(params, A, H, B);
-
-
-  size_t ots = (
-    params.dual.t * ((size_t) ceil(log2(params.dual.N())) + 1)
-    + 3 * params.primal.t * ((size_t) ceil(log2(params.primal.blockSize())) + 1)
-    + EqTest::numOTs(
-      params.primal.errorBits(), params.eqTestThreshold, params.primal.t
-    )
-  );
-  RandomOTSender alice_srots, bob_srots;
-  RandomOTReceiver alice_rrots, bob_rrots;
-  std::tie(alice_srots, bob_rrots) = this->mockRandomOTs(ots);
-  std::tie(bob_srots, alice_rrots) = this->mockRandomOTs(ots);
-
-  auto results = this->launch(
-    [&](std::vector<Channel> channels) -> BitString {
-      return sender.run(channels[0], alice_srots, alice_rrots);
-    },
-    [&](int _, Channel channel) -> BitString {
-      return receiver.run(channel, bob_srots, bob_rrots);
-    }
-  );
-
-  BitString a = sender.lpnOutput();
-  BitString b = receiver.lpnOutput();
-  BitString c = results.first ^ results.second[0];
-  ASSERT_EQ(a & b, c);
-}
-
 TEST_F(PCGTests, PCGRun) {
   PCGParams params(
     BitString::sample(LAMBDA), 1 << 12, 1 << 7, 1 << 6, 1 << 3,
@@ -258,16 +78,20 @@ TEST_F(PCGTests, PCGRun) {
   Beaver::PCG alice(ALICE_ID, params);
   Beaver::PCG bob(BOB_ID, params);
 
+  std::pair<size_t, size_t> nOTs = alice.numOTs(BOB_ID);
+
   RandomOTSender alice_srots, bob_srots;
   RandomOTReceiver alice_rrots, bob_rrots;
-  std::tie(alice_srots, bob_rrots) = this->mockRandomOTs(alice.numOTs());
-  std::tie(bob_srots, alice_rrots) = this->mockRandomOTs(alice.numOTs());
+  std::tie(alice_srots, bob_rrots) = this->mockRandomOTs(nOTs.first);
+  std::tie(bob_srots, alice_rrots) = this->mockRandomOTs(nOTs.second);
 
   auto results = this->launch(
     [&](std::vector<Channel> channels) -> std::pair<BitString, BitString> {
+      EC::Curve curve; // needed to initalize relic on this thread
       return alice.run(BOB_ID, channels[0], alice_srots, alice_rrots);
     },
     [&](int _, Channel channel) -> std::pair<BitString, BitString> {
+      EC::Curve curve; // needed to initalize relic on this thread
       return bob.run(ALICE_ID, channel, bob_srots, bob_rrots);
     }
   );
@@ -296,16 +120,20 @@ TEST_F(PCGTests, PCGNumOTs) {
   Beaver::PCG alice(ALICE_ID, params);
   Beaver::PCG bob(BOB_ID, params);
 
+  std::pair<size_t, size_t> nOTs = alice.numOTs(BOB_ID);
+
   RandomOTSender alice_srots, bob_srots;
   RandomOTReceiver alice_rrots, bob_rrots;
-  std::tie(alice_srots, bob_rrots) = this->mockRandomOTs(alice.numOTs());
-  std::tie(bob_srots, alice_rrots) = this->mockRandomOTs(alice.numOTs());
+  std::tie(alice_srots, bob_rrots) = this->mockRandomOTs(nOTs.first);
+  std::tie(bob_srots, alice_rrots) = this->mockRandomOTs(nOTs.second);
 
   auto results = this->launch(
     [&](std::vector<Channel> channels) -> std::pair<BitString, BitString> {
+      EC::Curve curve; // needed to initalize relic on this thread
       return alice.run(BOB_ID, channels[0], alice_srots, alice_rrots);
     },
     [&](int _, Channel channel) -> std::pair<BitString, BitString> {
+      EC::Curve curve; // needed to initalize relic on this thread
       return bob.run(ALICE_ID, channel, bob_srots, bob_rrots);
     }
   );

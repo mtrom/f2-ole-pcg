@@ -2,6 +2,8 @@
 
 #include <libscapi/include/comm/Comm.hpp>
 
+#include "ahe/ahe.hpp"
+#include "pkg/eqtest.hpp"
 #include "pkg/lpn.hpp"
 #include "pkg/pprf.hpp"
 #include "pkg/rot.hpp"
@@ -11,6 +13,81 @@
 #include "util/random.hpp"
 
 namespace Beaver {
+
+////////////////////////////////////////////////////////////////////////////////
+// 2-PARTY CORRELATION OBJECTS
+////////////////////////////////////////////////////////////////////////////////
+
+class PCG {
+public:
+  PCG(uint32_t id, const PCGParams& params);
+
+  // non-interactive steps to prepare for the protocol
+  void prepare();
+
+  // interactive steps during the protocol
+  void online(
+    uint32_t other_id, Channel channel, RandomOTSender srots, RandomOTReceiver rrots
+  );
+
+  // non-interactive steps after online to finalize the output correlations
+  std::pair<BitString, BitString> finalize(size_t other_id);
+
+  // run the entire protocol with party `other_id`
+  std::pair<BitString, BitString> run(
+    uint32_t other_id, Channel channel, RandomOTSender srots, RandomOTReceiver rrots
+  );
+
+  // return the programmed inputs
+  std::pair<BitString, BitString> inputs() const;
+
+  // required number of oblivious transfers for one protocol run based on `params`
+  std::pair<size_t, size_t> numOTs(uint32_t other_id) const;
+
+protected:
+  // helper methods shared by both parties
+  BitString secretTensorProcessing(std::vector<PPRF> pprfs) const;
+
+  std::vector<AHE::Ciphertext> homomorphicInnerProduct(
+    const AHE& ahe, const std::vector<AHE::Ciphertext>& enc_s,
+    const BitString& shares, const std::vector<uint32_t>& error
+  ) const;
+
+private:
+  uint32_t id;
+  PCGParams params;
+  AHE ahe;
+
+  // public matrices
+  LPN::PrimalMatrix A;
+  LPN::DualMatrix H;
+  LPN::DenseMatrix B; // = AH
+
+  // primal lpn secret vectors & errors
+  BitString s0, s1;
+  std::vector<uint32_t> e0, e1;
+
+  // dual lpn error
+  std::vector<uint32_t> epsilon;
+
+  std::vector<AHE::Ciphertext> enc_s0, enc_s1;
+
+  BitString send_masks, recv_masks;
+
+  std::unique_ptr<EqTest> eqtester;
+
+  // pprfs for both pcg directions
+  std::vector<PPRF> send_eXs, recv_eXs;
+  std::vector<DPF> send_eXas_eoe, recv_eXas_eoe;
+  std::vector<DPF> send_eXas, recv_eXas;
+
+  // TODO: why is this needed but send_eoe isn't?
+  BitString recv_eoe, send_eoe;
+};
+
+////////////////////////////////////////////////////////////////////////////////
+// INTERFACE FOR GARBLED MPC
+////////////////////////////////////////////////////////////////////////////////
 
 class Triple {
 public:
@@ -52,121 +129,6 @@ Triples transform(
   std::vector<BitString> cij, std::vector<BitString> dji, // the 2-party correlations
   std::vector<BitString> seeds                            // a prf key shared between other party
 );
-
-////////////////////////////////////////////////////////////////////////////////
-// 2-PARTY CORRELATION OBJECTS
-////////////////////////////////////////////////////////////////////////////////
-
-class Base {
-public:
-  Base(const PCGParams& params);
-
-  // initalize the public lpn instances
-  virtual void loadPublicMatrices(LPN::PrimalMatrix A, LPN::DualMatrix H, LPN::DenseMatrix B) {
-    this->A = A;
-    this->H = H;
-    this->B = B;
-  }
-
-  // run the entire protocol and output the triples
-  virtual BitString run(
-    std::shared_ptr<CommParty> channel, RandomOTSender srots, RandomOTReceiver rrots
-  ) const = 0;
-
-  // get the output of our own lpn instance
-  BitString lpnOutput() const;
-protected:
-  PCGParams params;
-
-  // public matrices
-  LPN::PrimalMatrix A;
-  LPN::DualMatrix H;
-  LPN::DenseMatrix B; // = AH
-
-  // primal lpn secret vector & error
-  BitString s;
-  std::vector<uint32_t> e;
-
-  // helper methods shared by both parties
-  BitString secretTensorProcessing(std::vector<PPRF> pprfs) const;
-
-  // compute the ⟨aᵢ,s⟩ · e terms
-  BitString sendInnerProductTerm(
-    std::shared_ptr<CommParty> channel, RandomOTSender rots
-  ) const;
-
-  BitString receiveInnerProductTerm(
-    std::shared_ptr<CommParty> channel, RandomOTReceiver rots
-  ) const;
-};
-
-class Sender : public Base {
-public:
-  Sender(const PCGParams& params);
-
-  Sender(
-    const PCGParams& params, LPN::PrimalMatrix A, LPN::DualMatrix H, LPN::DenseMatrix B
-  ) : Sender(params) {
-    this->loadPublicMatrices(A, H, B);
-  }
-
-  BitString run(
-    std::shared_ptr<CommParty> channel, RandomOTSender srots, RandomOTReceiver rrots
-  ) const override;
-protected:
-  // compute the ⟨bᵢ⊗ aᵢ,e₁ ⊗ s⟩ term
-  BitString secretTensor(std::shared_ptr<CommParty> channel, RandomOTSender rots) const;
-
-  // compute the (e₀ ○ e₁) term
-  BitString errorProduct(std::shared_ptr<CommParty> channel, RandomOTSender rots) const;
-};
-
-class Receiver : public Base {
-public:
-  Receiver(const PCGParams& params);
-  Receiver(
-    const PCGParams& params, LPN::PrimalMatrix A, LPN::DualMatrix H, LPN::DenseMatrix B
-  ) : Receiver(params) {
-    this->loadPublicMatrices(A, H, B);
-  }
-
-  void loadPublicMatrices(LPN::PrimalMatrix A, LPN::DualMatrix H, LPN::DenseMatrix B) override;
-
-  BitString run(
-    std::shared_ptr<CommParty> channel, RandomOTSender srots, RandomOTReceiver rrots
-  ) const override;
-protected:
-  // dual lpn error
-  std::vector<uint32_t> epsilon;
-
-  // compute the ⟨bᵢ⊗ aᵢ,ε ⊗ s⟩
-  BitString secretTensor(std::shared_ptr<CommParty> channel, RandomOTReceiver rots) const;
-
-  // compute the (e₀ ○ e₁) term
-  BitString errorProduct(std::shared_ptr<CommParty> channel, RandomOTReceiver rots) const;
-};
-
-class PCG {
-public:
-  PCG(uint32_t id, const PCGParams& params);
-
-  // run the pcg protocol with party `id` both has a sender and receiver
-  std::pair<BitString, BitString> run(
-    uint32_t id, std::shared_ptr<CommParty> channel, RandomOTSender srots, RandomOTReceiver rrots
-  ) const;
-
-  // return the programmed inputs (as both sender and receiver)
-  std::pair<BitString, BitString> inputs() const;
-
-  // required number of oblivious transfers based on the given parameters
-  size_t numOTs() const;
-private:
-  uint32_t id;
-  PCGParams params;
-
-  Sender sender;
-  Receiver receiver;
-};
 
 ////////////////////////////////////////////////////////////////////////////////
 // MOCK CLASSES
