@@ -190,26 +190,16 @@ BitString Sender::runNew(
   AHE ahe(this->params.primal.k);
 
   std::vector<PPRF> pprfs_a = PPRF::sample(params.dual.t, LAMBDA, params.primal.k, params.dual.N());
-  std::vector<PPRF> pprfs_b = PPRF::sample(this->e.size(), LAMBDA, 2, params.primal.blockSize());
+  std::vector<PPRF> pprfs_b = PPRF::sample(this->e.size(), LAMBDA, 1, params.primal.blockSize());
+  std::vector<PPRF> pprfs_d = PPRF::sample(this->e.size(), LAMBDA, 1, params.primal.blockSize());
 
   // my share of ⟨aᵢ,s⟩
   BitString share = BitString::sample(this->params.primal.t);
 
-  ////////////////////////////////
-
-  //////// (e₀ ○ e₁) TERM ////////
-  // run equality testing to get shares of e0[i] == e1[i]
-  EqTestSender eqtest(
-    params.primal.errorBits(), params.eqTestThreshold, this->e.size(), channel, srots
-  );
-  eqtest.init();
-  BitString shares = eqtest.run(this->e);
-
-  /////////////////////////////////////
+  ///////////////////////////////
 
   //////// ⟨bᵢ⊗ aᵢ,ε ⊗ s⟩ TERM ////////
   PPRF::send(pprfs_a, this->s, channel, srots);
-
   /////////////////////////////////////
 
   // (1)
@@ -218,22 +208,8 @@ BitString Sender::runNew(
   std::vector<AHE::Ciphertext> response = ahe.receive(this->params.primal.t, channel);
   BitString aXs_b = ahe.decrypt(response);
 
-  // TODO: this is super clunky, I should make a special function for n=2
-  // combined payload for both aXe and eqtest shares
-  std::vector<BitString> payloads;
-  for (size_t i = 0; i < shares.size(); i++) {
-      if (aXs_b[i] && shares[i]) {
-          payloads.push_back(BitString("11"));
-      } else if (aXs_b[i]) {
-          payloads.push_back(BitString("10"));
-      } else if (shares[i]) {
-          payloads.push_back(BitString("01"));
-      } else{
-          payloads.push_back(BitString("00"));
-      }
-  }
-
-  PPRF::send(pprfs_b, payloads, channel, srots);
+  // use inner product share as payload for pprfs
+  PPRF::sendDPFs(pprfs_b, aXs_b, channel, srots);
 
   // ⟨aᵢ,s⟩ · e TERM (2)
   std::vector<AHE::Ciphertext> s = ahe.receive(this->params.primal.k, channel);
@@ -263,10 +239,21 @@ BitString Sender::runNew(
     this->e, LAMBDA, 1, params.primal.blockSize(), channel, rrots
   );
 
+  // (e₀ ○ e₁) TERM
+  // run equality testing to get shares of e0[i] == e1[i]
+  EqTestSender eqtest(
+    params.primal.errorBits(), params.eqTestThreshold, this->e.size(), channel, srots
+  );
+  eqtest.init();
+  BitString shares = eqtest.run(this->e);
+
+  // create the pprfs for each regular error block & send with shares as payload
+  PPRF::sendDPFs(pprfs_d, shares, channel, srots);
+
+
   //////// POSTPROCESSING ////////
   BitString a = secretTensorProcessing(pprfs_a);
 
-  // TODO: d needs to come out of this too but it is not clear how
   BitString b;
   for (size_t i = 0; i < this->e.size(); i++) {
     b += pprfs_b[i].image();
@@ -280,6 +267,11 @@ BitString Sender::runNew(
     image[this->e[i]] ^= share[i];
 
     c += image;
+  }
+
+  BitString d;
+  for (size_t i = 0; i < this->e.size(); i++) {
+    d += pprfs_d[i].image();
   }
 
   return (a ^ b ^ c ^ d);
@@ -296,22 +288,6 @@ BitString Receiver::runNew(
 
   std::vector<PPRF> pprfs_c = PPRF::sample(this->e.size(), LAMBDA, 1, params.primal.blockSize());
   ///////////////////////////////
-
-  //////// (e₀ ○ e₁) TERM ////////
-  // run equality testing to get shares of e0[i] == e1[i]
-  EqTestReceiver eqtest(
-    params.primal.errorBits(), params.eqTestThreshold, this->e.size(), channel, rrots
-  );
-  eqtest.init();
-  BitString shares = eqtest.run(this->e);
-
-  // TODO: this needs to be axed and replaced with the combined one
-  // retrieve the pprf for each regular error block
-  std::vector<PPRF> pprfs_d = PPRF::receive(
-    this->e, (size_t) LAMBDA, (size_t) 1, params.primal.blockSize(), channel, rrots
-  );
-
-  /////////////////////////////////////
 
   // ⟨bᵢ⊗ aᵢ,ε ⊗ s⟩ TERM
   std::vector<PPRF> pprfs_a = PPRF::receive(
@@ -357,6 +333,19 @@ BitString Receiver::runNew(
   PPRF::sendDPFs(pprfs_c, aXs_c, channel, srots);
 
 
+  // (e₀ ○ e₁) TERM
+  // run equality testing to get shares of e0[i] == e1[i]
+  EqTestReceiver eqtest(
+    params.primal.errorBits(), params.eqTestThreshold, this->e.size(), channel, rrots
+  );
+  eqtest.init();
+  BitString shares = eqtest.run(this->e);
+
+  // retrieve the pprf for each regular error block
+  std::vector<PPRF> pprfs_d = PPRF::receive(
+    this->e, (size_t) LAMBDA, (size_t) 1, params.primal.blockSize(), channel, rrots
+  );
+
   //////// POSTPROCESSING ////////
   BitString a = secretTensorProcessing(pprfs_a);
 
@@ -375,7 +364,6 @@ BitString Receiver::runNew(
     c += pprfs_c[i].image();
   }
 
-  // TODO: delete this and take it from pprfs_b
   BitString d;
   for (size_t i = 0; i < this->e.size(); i++) {
     BitString image = pprfs_d[i].image();
@@ -386,8 +374,10 @@ BitString Receiver::runNew(
     d += image;
   }
 
+
   return (a ^ b ^ c ^ d);
 }
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // SENDER / RECEIVER ⟨bᵢ⊗ aᵢ,ε ⊗ s⟩ TERM
