@@ -63,11 +63,11 @@ std::pair<BitString, BitString> PCG::run(
 ) const {
   if (this->id < id) {
     return std::make_pair(
-      sender.run(channel, srots, rrots), receiver.run(channel, srots, rrots)
+      sender.runNew(channel, srots, rrots), receiver.runNew(channel, srots, rrots)
     );
   } else {
     return std::make_pair(
-      receiver.run(channel, srots, rrots), sender.run(channel, srots, rrots)
+      receiver.runNew(channel, srots, rrots), sender.runNew(channel, srots, rrots)
     );
   }
 }
@@ -177,6 +177,216 @@ BitString Base::lpnOutput() const {
     out[(i * params.primal.blockSize()) + this->e[i]] ^= 1;
   }
   return out;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// SENDER / RECEIVER RUN (NEW VERSION)
+////////////////////////////////////////////////////////////////////////////////
+
+BitString Sender::runNew(
+  std::shared_ptr<CommParty> channel, RandomOTSender srots, RandomOTReceiver rrots
+) const {
+  //////// PREPROCESSING ////////
+  AHE ahe(this->params.primal.k);
+
+  std::vector<PPRF> pprfs_a = PPRF::sample(params.dual.t, LAMBDA, params.primal.k, params.dual.N());
+  std::vector<PPRF> pprfs_b = PPRF::sample(this->e.size(), LAMBDA, 2, params.primal.blockSize());
+
+  // my share of ⟨aᵢ,s⟩
+  BitString share = BitString::sample(this->params.primal.t);
+
+  ////////////////////////////////
+
+  //////// (e₀ ○ e₁) TERM ////////
+  // run equality testing to get shares of e0[i] == e1[i]
+  EqTestSender eqtest(
+    params.primal.errorBits(), params.eqTestThreshold, this->e.size(), channel, srots
+  );
+  eqtest.init();
+  BitString shares = eqtest.run(this->e);
+
+  /////////////////////////////////////
+
+  //////// ⟨bᵢ⊗ aᵢ,ε ⊗ s⟩ TERM ////////
+  PPRF::send(pprfs_a, this->s, channel, srots);
+
+  /////////////////////////////////////
+
+  // (1)
+  //////// ⟨aᵢ,s₀⟩ · e₁ TERM ////////
+  ahe.send(ahe.encrypt(this->s), channel);
+  std::vector<AHE::Ciphertext> response = ahe.receive(this->params.primal.t, channel);
+  BitString aXs_b = ahe.decrypt(response);
+
+  // TODO: this is super clunky, I should make a special function for n=2
+  // combined payload for both aXe and eqtest shares
+  std::vector<BitString> payloads;
+  for (size_t i = 0; i < shares.size(); i++) {
+      if (aXs_b[i] && shares[i]) {
+          payloads.push_back(BitString("11"));
+      } else if (aXs_b[i]) {
+          payloads.push_back(BitString("10"));
+      } else if (shares[i]) {
+          payloads.push_back(BitString("01"));
+      } else{
+          payloads.push_back(BitString("00"));
+      }
+  }
+
+  PPRF::send(pprfs_b, payloads, channel, srots);
+
+  // ⟨aᵢ,s⟩ · e TERM (2)
+  std::vector<AHE::Ciphertext> s = ahe.receive(this->params.primal.k, channel);
+
+  std::vector<AHE::Ciphertext> aXs_c;
+  for (size_t i = 0; i < this->e.size(); i++) {
+    uint32_t idx = (i * this->params.primal.blockSize()) + this->e[i];
+
+    // homomorphically compute the inner product of A[idx] and s
+    std::set<uint32_t> pointset = A.getNonZeroElements(idx);
+    std::vector<uint32_t> points(pointset.begin(), pointset.end()); // TODO: don't need this?
+    AHE::Ciphertext ctx = s[points[0]];
+    for (size_t i = 1; i < points.size(); i++) {
+      ctx = ahe.add(ctx, s[points[i]]);
+    }
+
+    // add our share to get their share
+    ctx = ahe.add(ctx, share[i]);
+
+    aXs_c.push_back(ctx);
+  }
+
+  ahe.send(aXs_c, channel);
+
+  // retrieve the pprf for each regular error block
+  std::vector<PPRF> pprfs_c = PPRF::receive(
+    this->e, LAMBDA, 1, params.primal.blockSize(), channel, rrots
+  );
+
+  //////// POSTPROCESSING ////////
+  BitString a = secretTensorProcessing(pprfs_a);
+
+  // TODO: d needs to come out of this too but it is not clear how
+  BitString b;
+  for (size_t i = 0; i < this->e.size(); i++) {
+    b += pprfs_b[i].image();
+  }
+
+  BitString c;
+  for (size_t i = 0; i < this->e.size(); i++) {
+    BitString image = pprfs_c[i].image();
+
+    // at our error position, xor with our share
+    image[this->e[i]] ^= share[i];
+
+    c += image;
+  }
+
+  return (a ^ b ^ c ^ d);
+}
+
+BitString Receiver::runNew(
+  std::shared_ptr<CommParty> channel, RandomOTSender srots, RandomOTReceiver rrots
+) const {
+  //////// PREPROCESSING ////////
+  AHE ahe(this->params.primal.k);
+
+  // my share of ⟨aᵢ,s⟩
+  BitString share = BitString::sample(this->params.primal.t);
+
+  std::vector<PPRF> pprfs_c = PPRF::sample(this->e.size(), LAMBDA, 1, params.primal.blockSize());
+  ///////////////////////////////
+
+  //////// (e₀ ○ e₁) TERM ////////
+  // run equality testing to get shares of e0[i] == e1[i]
+  EqTestReceiver eqtest(
+    params.primal.errorBits(), params.eqTestThreshold, this->e.size(), channel, rrots
+  );
+  eqtest.init();
+  BitString shares = eqtest.run(this->e);
+
+  // TODO: this needs to be axed and replaced with the combined one
+  // retrieve the pprf for each regular error block
+  std::vector<PPRF> pprfs_d = PPRF::receive(
+    this->e, (size_t) LAMBDA, (size_t) 1, params.primal.blockSize(), channel, rrots
+  );
+
+  /////////////////////////////////////
+
+  // ⟨bᵢ⊗ aᵢ,ε ⊗ s⟩ TERM
+  std::vector<PPRF> pprfs_a = PPRF::receive(
+    this->epsilon, LAMBDA, params.primal.k, params.dual.N(), channel, rrots
+  );
+
+  // ⟨aᵢ,s⟩ · e TERM (1)
+  std::vector<AHE::Ciphertext> s = ahe.receive(this->params.primal.k, channel);
+
+
+  std::vector<AHE::Ciphertext> aXs_b;
+  for (size_t i = 0; i < this->e.size(); i++) {
+    uint32_t idx = (i * this->params.primal.blockSize()) + this->e[i];
+
+    // homomorphically compute the inner product of A[idx] and s
+    std::set<uint32_t> pointset = A.getNonZeroElements(idx);
+    std::vector<uint32_t> points(pointset.begin(), pointset.end()); // TODO: don't need this?
+    AHE::Ciphertext ctx = s[points[0]];
+    for (size_t i = 1; i < points.size(); i++) {
+      ctx = ahe.add(ctx, s[points[i]]);
+    }
+
+    // add our share to get their share
+    ctx = ahe.add(ctx, share[i]);
+
+    aXs_b.push_back(ctx);
+  }
+
+  ahe.send(aXs_b, channel);
+
+  // retrieve the pprf for each regular error block
+  std::vector<PPRF> pprfs_b = PPRF::receive(
+    this->e, LAMBDA, 1, params.primal.blockSize(), channel, rrots
+  );
+
+
+  // ⟨aᵢ,s⟩ · e TERM (2)
+  ahe.send(ahe.encrypt(this->s), channel);
+  std::vector<AHE::Ciphertext> response = ahe.receive(this->params.primal.t, channel);
+  BitString aXs_c = ahe.decrypt(response);
+
+  // use inner product share as payload for pprfs
+  PPRF::sendDPFs(pprfs_c, aXs_c, channel, srots);
+
+
+  //////// POSTPROCESSING ////////
+  BitString a = secretTensorProcessing(pprfs_a);
+
+  BitString b;
+  for (size_t i = 0; i < this->e.size(); i++) {
+    BitString image = pprfs_b[i].image();
+
+    // at our error position, xor with our share
+    image[this->e[i]] ^= share[i];
+
+    b += image;
+  }
+
+  BitString c;
+  for (size_t i = 0; i < this->e.size(); i++) {
+    c += pprfs_c[i].image();
+  }
+
+  // TODO: delete this and take it from pprfs_b
+  BitString d;
+  for (size_t i = 0; i < this->e.size(); i++) {
+    BitString image = pprfs_d[i].image();
+
+    // at our error position, output the e0[i] == e1[i] share
+    image[this->e[i]] ^= shares[i];
+
+    d += image;
+  }
+
+  return (a ^ b ^ c ^ d);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

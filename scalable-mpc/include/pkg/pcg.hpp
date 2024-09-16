@@ -73,6 +73,11 @@ public:
     std::shared_ptr<CommParty> channel, RandomOTSender srots, RandomOTReceiver rrots
   ) const = 0;
 
+  // run the entire protocol and output the triples
+  virtual BitString runNew(
+    std::shared_ptr<CommParty> channel, RandomOTSender srots, RandomOTReceiver rrots
+  ) const = 0;
+
   // get the output of our own lpn instance
   BitString lpnOutput() const;
 protected:
@@ -113,6 +118,10 @@ public:
   BitString run(
     std::shared_ptr<CommParty> channel, RandomOTSender srots, RandomOTReceiver rrots
   ) const override;
+
+  BitString runNew(
+    std::shared_ptr<CommParty> channel, RandomOTSender srots, RandomOTReceiver rrots
+  ) const override;
 protected:
   // compute the ⟨bᵢ⊗ aᵢ,e₁ ⊗ s⟩ term
   BitString secretTensor(std::shared_ptr<CommParty> channel, RandomOTSender rots) const;
@@ -133,6 +142,10 @@ public:
   void loadPublicMatrices(LPN::PrimalMatrix A, LPN::DualMatrix H, LPN::DenseMatrix B) override;
 
   BitString run(
+    std::shared_ptr<CommParty> channel, RandomOTSender srots, RandomOTReceiver rrots
+  ) const override;
+
+  BitString runNew(
     std::shared_ptr<CommParty> channel, RandomOTSender srots, RandomOTReceiver rrots
   ) const override;
 protected:
