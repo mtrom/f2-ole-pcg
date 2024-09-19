@@ -28,7 +28,7 @@ private:
   Beaver::Triples* triples;
 
   // public matrix
-  DenseMatrix A;
+  EncryptionMatrix A;
 };
 
 }

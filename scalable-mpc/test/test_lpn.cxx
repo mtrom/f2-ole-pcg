@@ -35,21 +35,6 @@ TEST(LPNTests, PrimalMatrixRowWeight) {
   }
 }
 
-TEST(LPNTests, PrimalMatrixAccess) {
-  PrimalParams params(N, k, t, l);
-  BitString key = BitString::sample(128);
-
-  PrimalMatrix A(key, params);
-  for (size_t i = 0; i < N; i++) {
-    BitString row = A[i];
-    for (size_t j = 0; j < k; j++) {
-      bool expected = row[j];
-      bool actual = A[{i, j}];
-      ASSERT_EQ(expected, actual);
-    }
-  }
-}
-
 TEST(LPNTests, DualMatrixDims) {
   DualParams params(N, 4, 32);
   BitString key = BitString::sample(128);
@@ -61,11 +46,11 @@ TEST(LPNTests, DualMatrixDims) {
   EXPECT_EQ(width, N * 4);
 }
 
-TEST(LPNTests, PrimalDualMultAllZeros) {
-  size_t P_HEIGHT = 8;
-  size_t P_WIDTH = 4;
-  size_t P_SPARSITY = 3;
-  size_t D_EXPANSION = 2;
+TEST(LPNTests, MatrixProduct) {
+  size_t P_HEIGHT = 128;
+  size_t P_WIDTH = 64;
+  size_t P_SPARSITY = 16;
+  size_t D_EXPANSION = 4;
 
   PrimalParams pparams(P_HEIGHT, P_WIDTH, P_HEIGHT / 2, P_SPARSITY);
   PrimalMatrix primal = PrimalMatrix::sample(pparams);
@@ -73,71 +58,36 @@ TEST(LPNTests, PrimalDualMultAllZeros) {
   DualParams dparams(P_WIDTH, D_EXPANSION, P_WIDTH / 2);
   DualMatrix dual = DualMatrix::sample(dparams);
 
-  dual.rows = std::make_shared<std::vector<BitString>>(std::vector<BitString>({
-    BitString("00000000"),
-    BitString("00000000"),
-    BitString("00000000"),
-    BitString("00000000"),
-  }));
+  MatrixProduct product = primal * dual;
 
-  DenseMatrix B = primal * dual;
-  ASSERT_EQ(B.dim(), std::make_pair(P_HEIGHT, P_WIDTH * D_EXPANSION));
-  for (size_t i = 0; i < B.dim().first; i++) {
-    EXPECT_EQ(B[i].toString(), std::string(P_WIDTH * D_EXPANSION, '0'));
+  // since both matrices are randomly generated, hard to test directly
+  // instead, test that P(Dv) = (PD)v which is the property we need anyhow
+
+  BitString vector = BitString::sample(dual.dim().second);
+
+  // since DualMatrix doesn't implement vector multiplication...
+  BitString Dv(dual.dim().first);
+  for (size_t row = 0; row < dual.dim().first; row++) {
+    for (size_t col = 0; col < dual.dim().second; col++) {
+      if (dual[{row, col}] && vector[col]) { Dv[row] = !Dv[row]; }
+    }
   }
+
+  BitString expected = primal * Dv;
+
+  BitString actual = primal.dim().first;
+  for (size_t i = 0; i < product.dim().first; i++) {
+    actual[i] = product[i] * vector;
+  }
+
+  ASSERT_EQ(expected, actual);
 }
 
-TEST(LPNTests, PrimalDualMult) {
-  size_t P_HEIGHT = 8;
-  size_t P_WIDTH = 4;
-  size_t P_SPARSITY = 2;
-  size_t D_EXPANSION = 2;
-
-  PrimalParams pparams(P_HEIGHT, P_WIDTH, P_HEIGHT / 2, P_SPARSITY);
-  PrimalMatrix primal = PrimalMatrix::sample(pparams);
-
-  primal.points = std::make_shared<std::vector<std::set<uint32_t>>>(
-    std::vector<std::set<uint32_t>>({
-      std::set<uint32_t>({0, 1}),
-      std::set<uint32_t>({0, 2}),
-      std::set<uint32_t>({0, 3}),
-      std::set<uint32_t>({1, 2}),
-      std::set<uint32_t>({1, 3}),
-      std::set<uint32_t>({2, 3}),
-      std::set<uint32_t>({0, 1}),
-      std::set<uint32_t>({0, 2}),
-    })
-  );
-
-  DualParams dparams(P_WIDTH, D_EXPANSION, P_WIDTH / 2);
-  DualMatrix dual = DualMatrix::sample(dparams);
-
-  dual.rows = std::make_shared<std::vector<BitString>>(std::vector<BitString>({
-    BitString("01010101"),
-    BitString("00110011"),
-    BitString("00001111"),
-    BitString("00000000"),
-  }));
-
-  DenseMatrix B = primal * dual;
-  ASSERT_EQ(B.dim(), std::make_pair(P_HEIGHT, P_WIDTH * D_EXPANSION));
-
-  // I just did these by hand
-  EXPECT_EQ(B[0].toString(), "01100110");
-  EXPECT_EQ(B[1].toString(), "01011010");
-  EXPECT_EQ(B[2].toString(), "01010101");
-  EXPECT_EQ(B[3].toString(), "00111100");
-  EXPECT_EQ(B[4].toString(), "00110011");
-  EXPECT_EQ(B[5].toString(), "00001111");
-  EXPECT_EQ(B[6].toString(), "01100110");
-  EXPECT_EQ(B[7].toString(), "01011010");
-}
-
-TEST(LPNTests, DenseVectorMult) {
+TEST(LPNTests, EncryptorVectorMult) {
   const uint32_t HEIGHT = 8;
   const uint32_t WIDTH  = 4;
 
-  DenseMatrix matrix(HEIGHT, WIDTH);
+  EncryptionMatrix matrix(HEIGHT, WIDTH);
 
   BitString vector("1011");
 
@@ -155,32 +105,4 @@ TEST(LPNTests, DenseVectorMult) {
 
   // I just did this by hand
   ASSERT_EQ(actual.toString(), "01011010");
-}
-
-TEST(LPNTests, SparseVectorMult) {
-  const uint32_t HEIGHT = 8;
-  const uint32_t WIDTH  = 4;
-
-  SparseMatrix matrix(HEIGHT, WIDTH);
-
-  BitString vector("1011");
-
-  matrix.points = std::make_shared<std::vector<std::set<uint32_t>>>(
-    std::vector<std::set<uint32_t>>({
-      std::set<uint32_t>({0, 1}),
-      std::set<uint32_t>({0, 2}),
-      std::set<uint32_t>({0, 3}),
-      std::set<uint32_t>({1, 2}),
-      std::set<uint32_t>({1, 3}),
-      std::set<uint32_t>({2, 3}),
-      std::set<uint32_t>({0, 1}),
-      std::set<uint32_t>({0, 2}),
-    })
-  );
-
-  BitString actual = matrix * vector;
-  ASSERT_EQ(actual.size(), HEIGHT);
-
-  // I just did this by hand
-  ASSERT_EQ(actual.toString(), "10011010");
 }

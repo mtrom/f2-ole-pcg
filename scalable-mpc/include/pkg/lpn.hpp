@@ -5,45 +5,31 @@
 
 #include "util/bitstring.hpp"
 #include "util/params.hpp"
+#include "util/random.hpp"
 
 namespace LPN {
 
-// abstract class that encapsulates basic binary matrix operations
-class Matrix {
+class MatrixProduct;
+class PrimalMatrix;
+class DualMatrix;
+
+class EncryptionMatrix {
 public:
-  // element access
-  virtual bool operator[](std::pair<size_t, size_t> idx) const = 0;
-
-  // retrieve an entire row as a bitstring
-  virtual BitString operator[](size_t idx) const = 0;
-
-  // get the matrix dimensions
-  virtual std::pair<size_t, size_t> dim() const = 0;
-
-  // matrix vector multiplication
-  virtual BitString operator*(const BitString& other) const = 0;
-
-};
-
-class DenseMatrix : public Matrix {
-public:
-  DenseMatrix() : width(0), rows(0) { }
+  EncryptionMatrix() : width(0), rows(0) { }
 
   // sample a random matrix using `key`
-  DenseMatrix(size_t height, size_t width, const BitString& key);
+  EncryptionMatrix(size_t height, size_t width, const BitString& key);
 
   // basic operations
-  bool operator[](std::pair<size_t, size_t> idx) const override;
-  BitString operator[](size_t idx) const override;
-  std::pair<size_t, size_t> dim() const override;
-  BitString operator*(const BitString& other) const override;
+  bool operator[](std::pair<size_t, size_t> idx) const;
+  BitString operator[](size_t idx) const;
+  std::pair<size_t, size_t> dim() const;
+  BitString operator*(const BitString& other) const;
 
   // for debugging
   std::string toString() const;
-
-  friend class SparseMatrix;
 protected:
-  DenseMatrix(size_t height, size_t width)
+  EncryptionMatrix(size_t height, size_t width)
     : width(width), rows(std::make_shared<std::vector<BitString>>(height)) { }
 
   // using shared pointer to prevent duplication in memory
@@ -52,54 +38,79 @@ protected:
 };
 
 // matrix with a constant number of non-zero elements per row
-class SparseMatrix : public Matrix {
+class PrimalMatrix {
 public:
-  // basic operations
-  bool operator[](std::pair<size_t, size_t> idx) const override;
-  BitString operator[](size_t idx) const override;
-  std::pair<size_t, size_t> dim() const override;
-  BitString operator*(const BitString& other) const override;
+  PrimalMatrix() { }
+  PrimalMatrix(const BitString& key, const PrimalParams& params)
+    : prf(std::make_shared<PRF<uint32_t>>(key)), height(params.n), width(params.k),
+      sparsity(params.l) { }
+
+  // just samples a key and returns a matrix; mostly for testing
+  static PrimalMatrix sample(const PrimalParams& params) {
+    return PrimalMatrix(BitString::sample(LAMBDA), params);
+  }
+
+  // matrix dimensions
+  std::pair<size_t, size_t> dim() const;
 
   // directly get non-zero points
-  std::set<uint32_t> getNonZeroElements(size_t idx) const { return (*points)[idx]; }
+  std::set<uint32_t> getNonZeroElements(size_t idx) const;
+
+  // matrix vector multiplication
+  BitString operator*(const BitString& other) const;
 
   // matrix multiplication
-  DenseMatrix operator*(const DenseMatrix& other) const;
+  MatrixProduct operator*(const DualMatrix& other) const;
 
   // for debugging
+  BitString operator[](size_t idx) const;
   std::string toString() const;
-
-  friend class DenseMatrix;
 protected:
-  // just sets up initial fields
-  SparseMatrix(size_t height, size_t width)
-    : width(width), points(std::make_shared<std::vector<std::set<uint32_t>>>(height)) { }
-
-  // all non-zero points (using shared pointer to prevent duplication in memory)
-  std::shared_ptr<std::vector<std::set<uint32_t>>> points;
-  size_t width;
+  std::shared_ptr<PRF<uint32_t>> prf;
+  size_t height, width, sparsity;
 };
 
-class PrimalMatrix : public SparseMatrix {
+class DualMatrix {
 public:
-  PrimalMatrix() : SparseMatrix(0, 0), key(0) { };
-  PrimalMatrix(const BitString& key, const PrimalParams& params);
+  DualMatrix() { }
+  DualMatrix(const BitString& key, const DualParams& params)
+    : prf(std::make_shared<PRF<BitString>>(key)), height(params.n), width(params.N()) { }
+
+  // matrix dimensions
+  std::pair<size_t, size_t> dim() const { return std::make_pair(height, width); }
+
+  // direct element access
+  bool operator[](std::pair<size_t, size_t> idx) const;
+
+  // matrix vector multiplication
+  BitString operator*(const BitString& other) const;
 
   // just samples a key and returns a matrix; mostly for testing
-  static PrimalMatrix sample(const PrimalParams& params);
+  static DualMatrix sample(const DualParams& params) {
+    return DualMatrix(BitString::sample(LAMBDA), params);
+  }
 private:
-  BitString key;
+  std::shared_ptr<PRF<BitString>> prf;
+  size_t height, width;
 };
 
-class DualMatrix : public DenseMatrix {
+class MatrixProduct {
 public:
-  DualMatrix() : DenseMatrix(), key(0) { };
-  DualMatrix(const BitString& key, const DualParams& params);
+  MatrixProduct() { }
+  MatrixProduct(PrimalMatrix primal, DualMatrix dual) : primal(primal), dual(dual) {
+    if (primal.dim().second != dual.dim().first) {
+      throw std::domain_error("[MatrixProduct] matrix dimensions mismatched");
+    }
+  }
 
-  // just samples a key and returns a matrix; mostly for testing
-  static DualMatrix sample(const DualParams& params);
+  std::pair<size_t, size_t> dim() const {
+    return std::make_pair(primal.dim().first, dual.dim().second);
+  }
+
+  BitString operator[](size_t idx) const;
 private:
-  BitString key;
+  PrimalMatrix primal;
+  DualMatrix dual;
 };
 
 }

@@ -26,14 +26,13 @@ public:
   }
   const std::vector<unsigned char> getKey() const { return key; }
 
+  // aes block size
+  const size_t BLOCK_SIZE = 16;
 private:
   std::vector<unsigned char> key;
 
   // generic version that can be used by templated functions
   T operator()(BitString x, uint32_t bound) const;
-
-  // aes block size
-  const size_t BLOCK_SIZE = 16;
 };
 
 // simple class to sample bits without running AES for each one

@@ -65,7 +65,7 @@ PCG::PCG(uint32_t id, const PCGParams& params)
   : id(id), params(params), ahe(params.primal.k), A(params.pkey, params.primal),
     H(params.dkey, params.dual)
 {
-  this->B = A * H;
+  this->B = this->A * this->H;
 
   // sample primal error vectors
   this->e0 = sampleVector(params.primal.t, params.primal.blockSize());

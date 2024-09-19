@@ -61,7 +61,7 @@ private:
   // public matrices
   LPN::PrimalMatrix A;
   LPN::DualMatrix H;
-  LPN::DenseMatrix B; // = AH
+  LPN::MatrixProduct B; // = AH
 
   // primal lpn secret vectors & errors
   BitString s0, s1;
