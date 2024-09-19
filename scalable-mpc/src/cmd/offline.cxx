@@ -36,12 +36,10 @@ void run(const PCGParams& params) {
     Channel channel = std::make_shared<CommPartyTCPSynced>(ios, asocket, bsocket);
     channel->join(COMM_SLEEP, COMM_TIMEOUT);
 
-    Timer setup("[Offline] Offline Setup");
     Beaver::PCG pcg(ALICE_ID, params);
-    setup.stop();
 
 
-    Timer ots("[Offline] OT Extension");
+    Timer ots("[offline] ot ext");
     size_t srots, rrots;
     std::tie(srots, rrots) = pcg.numOTs(BOB_ID);
 
@@ -52,10 +50,17 @@ void run(const PCGParams& params) {
     receiver.run(rrots, channel, BASE_PORT + 2);
     ots.stop();
 
+    Timer prepare("[offline] prepare");
+    pcg.prepare();
+    prepare.stop();
 
-    Timer run("[Offline] Online Phase");
-    std::pair<BitString, BitString> output = pcg.run(BOB_ID, channel, sender, receiver);
-    run.stop();
+    Timer online("[offline] online");
+    pcg.online(BOB_ID, channel, sender, receiver);
+    online.stop();
+
+    Timer finalize("[offline] finalize");
+    std::pair<BitString, BitString> output = pcg.finalize(BOB_ID);
+    finalize.stop();
 
     float upload = (float) channel->bytesIn / 1000000;
     float download = (float) channel->bytesOut / 1000000;
