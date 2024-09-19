@@ -45,12 +45,8 @@ public:
   std::pair<size_t, size_t> numOTs(uint32_t other_id) const;
 
 protected:
-  // helper methods shared by both parties
-  BitString secretTensorProcessing(std::vector<PPRF> pprfs) const;
-
   std::vector<AHE::Ciphertext> homomorphicInnerProduct(
-    const AHE& ahe, const std::vector<AHE::Ciphertext>& enc_s,
-    const BitString& shares, const std::vector<uint32_t>& error
+    const std::vector<AHE::Ciphertext>& enc_s, bool sender
   ) const;
 
 private:

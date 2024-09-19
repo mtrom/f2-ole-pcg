@@ -131,12 +131,8 @@ void PCG::online(
   });
 
   // homomorphically compute Enc(⟨aᵢ,s⟩) for both directions
-  std::vector<AHE::Ciphertext> enc_recv_eXas = homomorphicInnerProduct(
-    ahe, other_enc_s1, this->send_masks, this->e0
-  );
-  std::vector<AHE::Ciphertext> enc_send_eXas = homomorphicInnerProduct(
-    ahe, other_enc_s0, this->recv_masks, this->e1
-  );
+  std::vector<AHE::Ciphertext> enc_recv_eXas = homomorphicInnerProduct(other_enc_s1, true);
+  std::vector<AHE::Ciphertext> enc_send_eXas = homomorphicInnerProduct(other_enc_s0, false);
 
   // swap Enc(⟨aᵢ,s₀⟩) and Enc(⟨aᵢ,s₁⟩)
   std::vector<AHE::Ciphertext> send_resp, recv_resp;
@@ -189,8 +185,53 @@ std::pair<BitString, BitString> PCG::finalize(size_t other_id) {
     send_out += send_image;
     recv_out += recv_image;
   }
-  send_out ^= secretTensorProcessing(this->send_eXs);
-  recv_out ^= secretTensorProcessing(this->recv_eXs);
+
+  // arrange our shares of the ε ⊗ s matrix by column
+  std::vector<BitString> send_eXs_matrix(params.primal.k, BitString(params.dual.N()));
+  std::vector<BitString> recv_eXs_matrix(params.primal.k, BitString(params.dual.N()));
+  MULTI_TASK([this, &send_eXs_matrix, &recv_eXs_matrix](size_t start, size_t end) {
+    for (size_t c = start; c < end; c++) {
+      for (size_t r = 0; r < params.dual.N(); r++) {
+        for (size_t p = 0; p < params.dual.t; p++) {
+          send_eXs_matrix[c][r] ^= this->send_eXs[p](r)[c];
+          recv_eXs_matrix[c][r] ^= this->recv_eXs[p](r)[c];
+        }
+      }
+    }
+  }, params.primal.k);
+
+  // then use those to compute shares of the ⟨bᵢ⊗ aᵢ,ε ⊗ s⟩ vector
+  auto baex_shares = TASK_REDUCE<std::pair<BitString, BitString>>(
+    [this, &send_eXs_matrix, &recv_eXs_matrix](size_t start, size_t end)
+  {
+    BitString send_out(end - start), recv_out(end - start);
+    for (size_t i = start; i < end; i++) {
+      BitString send_aXeXs, recv_aXeXs;
+      for (uint32_t idx : this->A.getNonZeroElements(i)) {
+        if (send_aXeXs.size() == 0) {
+          send_aXeXs = send_eXs_matrix[idx];
+          recv_aXeXs = recv_eXs_matrix[idx];
+        } else {
+          send_aXeXs ^= send_eXs_matrix[idx];
+          recv_aXeXs ^= recv_eXs_matrix[idx];
+        }
+      }
+      BitString row = this->B[i];
+      send_out[i - start] = row * send_aXeXs;
+      recv_out[i - start] = row * recv_aXeXs;
+    }
+    return std::make_pair(send_out, recv_out);
+  }, [](std::vector<std::pair<BitString, BitString>> pairs) {
+    BitString first, second;
+    for (std::pair<BitString, BitString> pair : pairs) {
+      first += pair.first;
+      second += pair.second;
+    }
+    return std::make_pair(first, second);
+  }, params.size);
+
+  send_out ^= baex_shares.first;
+  recv_out ^= baex_shares.second;
 
   return (
     (id < other_id) ? std::make_pair(send_out, recv_out) : std::make_pair(recv_out, send_out)
@@ -209,55 +250,23 @@ std::pair<BitString, BitString> PCG::run(
 // HELPER METHODS
 ////////////////////////////////////////////////////////////////////////////////
 
-BitString PCG::secretTensorProcessing(std::vector<PPRF> pprfs) const {
-  // arrange our shares of the ε ⊗ s matrix by column
-  std::vector<BitString> eXs(params.primal.k, BitString(params.dual.N()));
-  MULTI_TASK([this, &eXs, &pprfs](size_t start, size_t end) {
-    for (size_t c = start; c < end; c++) {
-      for (size_t r = 0; r < params.dual.N(); r++) {
-        for (size_t p = 0; p < params.dual.t; p++) {
-          eXs[c][r] ^= pprfs[p](r)[c];
-        }
-      }
-    }
-  }, params.primal.k);
-
-  // then use those to compute shares of the ⟨bᵢ⊗ aᵢ,ε ⊗ s⟩ vector
-  return TASK_REDUCE<BitString>([this, &eXs](size_t start, size_t end) {
-    BitString out(end - start);
-    for (size_t i = start; i < end; i++) {
-      BitString aXeXs;
-      for (uint32_t idx : this->A.getNonZeroElements(i)) {
-        if (aXeXs.size() == 0) { aXeXs = eXs[idx];  }
-        else                   { aXeXs ^= eXs[idx]; }
-      }
-      out[i - start] = this->B[i] * aXeXs;
-    }
-    return out;
-  }, BitString::concat, params.size);
-}
-
-// TODO: ahe / error really don't need to be passed in
 std::vector<AHE::Ciphertext> PCG::homomorphicInnerProduct(
-  const AHE& ahe,
-  const std::vector<AHE::Ciphertext>& enc_s,
-  const BitString& masks,
-  const std::vector<uint32_t>& error
+  const std::vector<AHE::Ciphertext>& enc_s, bool sender
 ) const {
   std::vector<AHE::Ciphertext> recv_aXs;
-  for (size_t i = 0; i < error.size(); i++) {
-    uint32_t idx = (i * this->params.primal.blockSize()) + error[i];
+  for (size_t i = 0; i < params.primal.t; i++) {
+    uint32_t idx = (i * this->params.primal.blockSize()) + (sender ? this->e0[i] : this->e1[i]);
 
     // homomorphically compute the inner product of A[idx] and enc(s1)
     std::set<uint32_t> pointset = this->A.getNonZeroElements(idx);
     std::vector<uint32_t> points(pointset.begin(), pointset.end()); // TODO: don't need this?
     AHE::Ciphertext ctx = enc_s[points[0]];
     for (size_t i = 1; i < points.size(); i++) {
-      ctx = ahe.add(ctx, enc_s[points[i]]);
+      ctx = this->ahe.add(ctx, enc_s[points[i]]);
     }
 
     // add our share to get their share
-    ctx = ahe.add(ctx, masks[i]);
+    ctx = this->ahe.add(ctx, (sender ? this->send_masks[i] : this->recv_masks[i]));
 
     recv_aXs.push_back(ctx);
   }
