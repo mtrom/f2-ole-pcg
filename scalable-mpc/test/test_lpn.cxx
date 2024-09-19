@@ -184,3 +184,44 @@ TEST(LPNTests, SparseVectorMult) {
   // I just did this by hand
   ASSERT_EQ(actual.toString(), "10011010");
 }
+
+TEST(LPNTests, DenseReadWrite) {
+  const uint32_t HEIGHT = 8;
+  const uint32_t WIDTH  = 4;
+
+  DenseMatrix expected(HEIGHT, WIDTH);
+
+  (*expected.rows)[0] = BitString("0000");
+  (*expected.rows)[1] = BitString("1000");
+  (*expected.rows)[2] = BitString("0100");
+  (*expected.rows)[3] = BitString("1100");
+  (*expected.rows)[4] = BitString("0010");
+  (*expected.rows)[5] = BitString("1010");
+  (*expected.rows)[6] = BitString("0110");
+  (*expected.rows)[7] = BitString("1110");
+
+  expected.write("test.matrix");
+  DenseMatrix actual = DenseMatrix::read("test.matrix");
+
+  ASSERT_EQ(actual.width, expected.width);
+  ASSERT_EQ(actual.rows->size(), expected.rows->size());
+
+  for (size_t i = 0; i < HEIGHT; i++) {
+    EXPECT_EQ((*actual.rows)[i], (*expected.rows)[i]);
+  }
+}
+
+TEST(LPNTests, SparseReadWrite) {
+  PrimalParams pparams(8, 4, 4, 4);
+  PrimalMatrix expected = PrimalMatrix::sample(pparams);
+
+  expected.write("test.matrix");
+  PrimalMatrix actual = PrimalMatrix::read("test.matrix");
+
+  ASSERT_EQ(actual.width, expected.width);
+  ASSERT_EQ(actual.points->size(), expected.points->size());
+
+  for (size_t i = 0; i < expected.points->size(); i++) {
+    EXPECT_EQ((*actual.points)[i], (*expected.points)[i]);
+  }
+}

@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 
 # project details
 project(ScalableMPC VERSION 1.0)
+set(PUBGEN_EXEC pubgen)
 set(OFFLINE_EXEC offline)
 set(ONLINE_EXEC online)
 set(LIBRARY_NAME scalable_mpc_lib)
@@ -75,9 +76,21 @@ target_link_libraries(${OFFLINE_EXEC} PRIVATE
   $ENV{HOME}/libscapi/install/lib/libcryptoTools.a
   gmp boost_system boost_thread boost_serialization pthread dl crypto ssl z)
 
+add_executable(${PUBGEN_EXEC} src/cmd/pubgen.cxx)
+target_link_libraries(${PUBGEN_EXEC} PRIVATE ${LIBRARY_NAME})
+target_link_libraries(${PUBGEN_EXEC} PRIVATE
+  $ENV{HOME}/libscapi/libscapi.a
+  $ENV{HOME}/libscapi/install/lib/libOTExtensionBristol.a
+  $ENV{HOME}/libscapi/install/lib/libOTe.a
+  $ENV{HOME}/libscapi/install/lib/libsimpleot.a
+  $ENV{HOME}/libscapi/install/lib/libcryptoTools.a
+  gmp boost_system boost_thread boost_serialization pthread dl crypto ssl z)
+
+
 # properties
 set_target_properties(
   ${LIBRARY_NAME}
+  ${PUBGEN_EXEC}
   ${OFFLINE_EXEC}
     PROPERTIES
       CXX_STANDARD 14

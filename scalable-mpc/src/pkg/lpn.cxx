@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <fstream>
 #include <thread>
 
 #include "util/concurrency.hpp"
@@ -24,21 +25,21 @@ DenseMatrix::DenseMatrix(size_t height, size_t width, const BitString& key)
 }
 
 bool DenseMatrix::operator[](std::pair<size_t, size_t> idx) const {
-  if (idx.first >= (*this->rows).size() || idx.second >= this->width) {
+  if (idx.first >= this->rows->size() || idx.second >= this->width) {
     throw std::domain_error("[DenseMatrix::operator[](std::pair)] idx out of range");
   }
   return (*rows)[idx.first][idx.second];
 }
 
 BitString DenseMatrix::operator[](size_t idx) const {
-  if (idx >= (*this->rows).size()) {
+  if (idx >= this->rows->size()) {
     throw std::domain_error("[DualMatrix::operator[](size_t)] idx out of range");
   }
   return (*this->rows)[idx];
 }
 
 std::pair<size_t, size_t> DenseMatrix::dim() const {
-  return std::make_pair((*this->rows).size(), this->width);
+  return std::make_pair(this->rows->size(), this->width);
 }
 
 BitString DenseMatrix::operator*(const BitString& other) const {
@@ -46,15 +47,50 @@ BitString DenseMatrix::operator*(const BitString& other) const {
     throw std::domain_error("[DenseMatrix::operator*(BitString)] vector dimension mismatched");
   }
   BitString result(this->dim().first);
-  for (size_t i = 0; i < (*this->rows).size(); i++) {
+  for (size_t i = 0; i < this->rows->size(); i++) {
     result[i] = (*this->rows)[i] * other;
   }
   return result;
 }
 
+
+void DenseMatrix::write(const std::string& filename) {
+  std::ofstream out(filename, std::ios::binary);
+  if (!out) { throw std::runtime_error("[DenseMatrix::write] failed to open file"); }
+
+  size_t height = this->rows->size();
+  out.write(reinterpret_cast<const char*>(&height), sizeof(height));
+  out.write(reinterpret_cast<const char*>(&this->width),  sizeof(this->width));
+
+  for (BitString& row : *rows) {
+    out.write(reinterpret_cast<char*>(row.data()), (this->width + 7) / 8);
+  }
+}
+
+DenseMatrix DenseMatrix::read(const std::string& filename) {
+  std::ifstream in(filename, std::ios::binary);
+  if (!in) { throw std::runtime_error("[DenseMatrix::read] failed to open file"); }
+
+  size_t width, height;
+  in.read(reinterpret_cast<char*>(&height), sizeof(height));
+  in.read(reinterpret_cast<char*>(&width),  sizeof(width));
+
+  DenseMatrix out;
+  out.width = width;
+  out.rows = std::make_shared<std::vector<BitString>>();
+
+  for (size_t i = 0; i < height; i++) {
+    BitString row(width);
+    in.read(reinterpret_cast<char*>(row.data()), (width + 7) / 8);
+    out.rows->push_back(row);
+  }
+
+  return out;
+}
+
 std::string DenseMatrix::toString() const {
   std::string out;
-  for (size_t i = 0; i < (*this->rows).size(); i++) {
+  for (size_t i = 0; i < this->rows->size(); i++) {
     out += (*this->rows)[i].toString() + "\n";
   }
   return out;
@@ -151,6 +187,45 @@ PrimalMatrix::PrimalMatrix(const BitString& key, const PrimalParams& params)
 PrimalMatrix PrimalMatrix::sample(const PrimalParams& params) {
   return PrimalMatrix(BitString::sample(LAMBDA), params);
 }
+
+void PrimalMatrix::write(const std::string& filename) {
+  std::ofstream out(filename, std::ios::binary);
+  if (!out) { throw std::runtime_error("[SparseMatrix::write] failed to open file"); }
+
+  size_t height = this->points->size();
+  out.write(reinterpret_cast<const char*>(&height), sizeof(height));
+  out.write(reinterpret_cast<const char*>(&this->width),  sizeof(this->width));
+
+  for (std::set<uint32_t>& row : *this->points) {
+    for (uint32_t point : row) {
+      out.write(reinterpret_cast<const char*>(&point), sizeof(point));
+    }
+  }
+}
+
+PrimalMatrix PrimalMatrix::read(const std::string& filename) {
+  std::ifstream in(filename, std::ios::binary);
+  if (!in) { throw std::runtime_error("[SparseMatrix::read] failed to open file"); }
+
+  size_t width, height;
+  in.read(reinterpret_cast<char*>(&height), sizeof(height));
+  in.read(reinterpret_cast<char*>(&width),  sizeof(width));
+
+  PrimalMatrix out;
+  out.width = width;
+  out.points = std::make_shared<std::vector<std::set<uint32_t>>>(height);
+
+  for (size_t i = 0; i < height; i++) {
+    for (size_t j = 0 ; j < width; j++) {
+      uint32_t point;
+      in.read(reinterpret_cast<char*>(&point), sizeof(point));
+      (*out.points)[i].insert(point);
+    }
+  }
+
+  return out;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // DUAL MATRIX

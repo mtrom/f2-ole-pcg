@@ -38,6 +38,10 @@ public:
   std::pair<size_t, size_t> dim() const override;
   BitString operator*(const BitString& other) const override;
 
+  // read / write to disk
+  void write(const std::string& filename);
+  static DenseMatrix read(const std::string& filename);
+
   // for debugging
   std::string toString() const;
 
@@ -87,6 +91,10 @@ public:
 
   // just samples a key and returns a matrix; mostly for testing
   static PrimalMatrix sample(const PrimalParams& params);
+
+  // read / write to disk
+  void write(const std::string& filename);
+  static PrimalMatrix read(const std::string& filename);
 private:
   BitString key;
 };
