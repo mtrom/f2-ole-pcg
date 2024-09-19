@@ -25,6 +25,8 @@ public:
 
 };
 
+class MatrixProduct;
+
 class DenseMatrix : public Matrix {
 public:
   DenseMatrix() : width(0), rows(0) { }
@@ -64,7 +66,7 @@ public:
   std::set<uint32_t> getNonZeroElements(size_t idx) const { return (*points)[idx]; }
 
   // matrix multiplication
-  DenseMatrix operator*(const DenseMatrix& other) const;
+  MatrixProduct operator*(const DenseMatrix& other) const;
 
   // for debugging
   std::string toString() const;
@@ -100,6 +102,24 @@ public:
   static DualMatrix sample(const DualParams& params);
 private:
   BitString key;
+};
+
+class MatrixProduct {
+public:
+  MatrixProduct(SparseMatrix sparse, DenseMatrix dense) : sparse(sparse), dense(dense) {
+    if (sparse.dim().second != dense.dim().first) {
+      throw std::domain_error("[MatrixProduct] matrix dimensions mismatched");
+    }
+  }
+
+  std::pair<size_t, size_t> dim() const {
+    return std::make_pair(sparse.dim().first, dense.dim().second);
+  }
+
+  BitString operator[](size_t idx) const;
+private:
+  SparseMatrix sparse;
+  DenseMatrix dense;
 };
 
 }

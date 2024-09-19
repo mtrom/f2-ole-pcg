@@ -80,7 +80,7 @@ TEST(LPNTests, PrimalDualMultAllZeros) {
     BitString("00000000"),
   }));
 
-  DenseMatrix B = primal * dual;
+  MatrixProduct B = primal * dual;
   ASSERT_EQ(B.dim(), std::make_pair(P_HEIGHT, P_WIDTH * D_EXPANSION));
   for (size_t i = 0; i < B.dim().first; i++) {
     EXPECT_EQ(B[i].toString(), std::string(P_WIDTH * D_EXPANSION, '0'));
@@ -119,7 +119,7 @@ TEST(LPNTests, PrimalDualMult) {
     BitString("00000000"),
   }));
 
-  DenseMatrix B = primal * dual;
+  MatrixProduct B = primal * dual;
   ASSERT_EQ(B.dim(), std::make_pair(P_HEIGHT, P_WIDTH * D_EXPANSION));
 
   // I just did these by hand

@@ -87,26 +87,13 @@ std::pair<size_t, size_t> SparseMatrix::dim() const {
   return std::make_pair((*this->points).size(), this->width);
 }
 
-DenseMatrix SparseMatrix::operator*(const DenseMatrix& other) const {
+MatrixProduct SparseMatrix::operator*(const DenseMatrix& other) const {
   if (this->dim().second != other.dim().first) {
-    throw std::domain_error("[SparseMatrix::operator*] matrix dimensions mismatched");
+    throw std::domain_error(
+      "[SparseMatrix::operator*(DenseMatrix)] matrix dimensions mismatched"
+    );
   }
-  DenseMatrix result((*this->points).size(), other.width);
-
-  MULTI_TASK([this, &other, &result](size_t start, size_t end) {
-    for (size_t row = start; row < end; row++) {
-      (*result.rows)[row] = BitString(other.width);
-      for (size_t col = 0; col < other.width; col++) {
-        bool innerproduct = false;
-        for (uint32_t point : (*this->points)[row]) {
-          if (other[{point, col}]) { innerproduct = !innerproduct; }
-        }
-        (*result.rows)[row][col] = innerproduct;
-      }
-    }
-  }, (*this->points).size());
-
-  return result;
+  return MatrixProduct(*this, other);
 }
 
 BitString SparseMatrix::operator*(const BitString& other) const {
@@ -170,6 +157,27 @@ DualMatrix::DualMatrix(const BitString& key, const DualParams& params)
 
 DualMatrix DualMatrix::sample(const DualParams& params) {
   return DualMatrix(BitString::sample(LAMBDA), params);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// MATRIX PRODUCT
+////////////////////////////////////////////////////////////////////////////////
+
+BitString MatrixProduct::operator[](size_t idx) const {
+  if (idx >= this->dim().first) {
+    throw std::domain_error("[MatrixProduct::operator[](size_t)] idx out of range");
+  }
+
+  BitString row(this->dim().second);
+
+  for (size_t col = 0; col < row.size(); col++) {
+    bool element = false;
+    for (uint32_t point : sparse.getNonZeroElements(idx)) {
+      if (dense[{point, col}]) { element = !element; }
+    }
+    row[col] = element;
+  }
+  return row;
 }
 
 }

@@ -63,10 +63,8 @@ std::pair<BitString, BitString> PCG::inputs() const {
 
 PCG::PCG(uint32_t id, const PCGParams& params)
   : id(id), params(params), ahe(params.primal.k), A(params.pkey, params.primal),
-    H(params.dkey, params.dual)
+    H(params.dkey, params.dual), B(A, H)
 {
-  this->B = A * H;
-
   // sample primal error vectors
   this->e0 = sampleVector(params.primal.t, params.primal.blockSize());
   this->e1 = sampleVector(params.primal.t, params.primal.blockSize());
