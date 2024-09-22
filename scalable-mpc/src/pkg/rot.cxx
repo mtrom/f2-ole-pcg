@@ -70,10 +70,12 @@ void RandomOTSender::run(size_t total, std::shared_ptr<CommParty> channel, int p
   *this->last = this->results->size();;
 }
 
-void RandomOTReceiver::run(size_t total, std::shared_ptr<CommParty> channel, int port) {
+void RandomOTReceiver::run(
+  size_t total, std::shared_ptr<CommParty> channel, const std::string& hostname, int port
+) {
   BitString b = BitString::sample(total);
   OTExtensionRandomizedRInput input(b.expand(), RandomOT::DEFAULT_ELEMENT_SIZE);
-  OTExtensionBristolReceiver ot("localhost", port, true, channel);
+  OTExtensionBristolReceiver ot(hostname, port, true, channel);
 
   shared_ptr<OTBatchROutput> output = ot.transfer(&input);
   std::vector<byte> mb = ((OTOnByteArrayROutput*) output.get())->getXSigma();

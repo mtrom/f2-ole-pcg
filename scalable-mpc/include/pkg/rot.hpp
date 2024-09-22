@@ -25,9 +25,6 @@ public:
       first(std::make_shared<size_t>(0)),
       last(std::make_shared<size_t>(ots.size())) { }
 
-  // run the protocol to actually get the random ots
-  virtual void run(size_t total, std::shared_ptr<CommParty> channel, int port) = 0;
-
   // consume a single random ot with `size` bits and return it
   virtual T get(size_t size = DEFAULT_ELEMENT_SIZE) = 0;
 
@@ -49,7 +46,7 @@ class RandomOTSender : public RandomOT<std::pair<BitString, BitString>> {
 public:
   using RandomOT::RandomOT;
 
-  void run(size_t total, std::shared_ptr<CommParty> channel, int port) override;
+  void run(size_t total, std::shared_ptr<CommParty> channel, int port);
   std::pair<BitString, BitString> get(size_t size = DEFAULT_ELEMENT_SIZE) override;
 
   // use these random ots to perform some number of normal ots
@@ -78,7 +75,9 @@ class RandomOTReceiver : public RandomOT<std::pair<bool, BitString>> {
 public:
   using RandomOT::RandomOT;
 
-  void run(size_t total, std::shared_ptr<CommParty> channel, int port) override;
+  void run(
+    size_t total, std::shared_ptr<CommParty> channel, const std::string& hostname, int port
+  );
   std::pair<bool, BitString> get(size_t size = DEFAULT_ELEMENT_SIZE) override;
 
   // use these random ots to perform some number of normal ots with the same size

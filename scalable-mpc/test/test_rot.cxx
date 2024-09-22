@@ -33,7 +33,7 @@ TEST_F(ROTTests, Run) {
       return true;
     },
     [&]() -> bool {
-      receiver.run(total, this->rch, 3000);
+      receiver.run(total, this->rch, "localhost", 3000);
       return true;
     }
   );
@@ -64,7 +64,7 @@ TEST_F(ROTTests, GetSizes) {
       return true;
     },
     [&]() -> bool {
-      receiver.run(total, this->rch, 3000);
+      receiver.run(total, this->rch, "localhost", 3000);
       return true;
     }
   );
@@ -103,7 +103,7 @@ TEST_F(ROTTests, TransferMultiBit) {
       return true;
     },
     [&]() -> std::vector<BitString> {
-      receiver.run(total, this->rch, 3000);
+      receiver.run(total, this->rch, "localhost", 3000);
       return receiver.transfer(choices, m_size, this->rch);
     }
   );
@@ -134,7 +134,7 @@ TEST_F(ROTTests, TransferDifferingSizes) {
       return true;
     },
     [&]() -> std::vector<BitString> {
-      receiver.run(total, this->rch, 3000);
+      receiver.run(total, this->rch, "localhost", 3000);
       return receiver.transfer(choices, sizes, this->rch);
     }
   );
@@ -164,7 +164,7 @@ TEST_F(ROTTests, TransferSingleBit) {
       return true;
     },
     [&]() -> BitString {
-      receiver.run(total, this->rch, 3000);
+      receiver.run(total, this->rch, "localhost", 3000);
       return receiver.transfer(choices, this->rch);
     }
   );
