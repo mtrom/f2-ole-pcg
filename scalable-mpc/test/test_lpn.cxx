@@ -96,16 +96,16 @@ TEST(LPNTests, PrimalDualMult) {
   PrimalParams pparams(P_HEIGHT, P_WIDTH, P_HEIGHT / 2, P_SPARSITY);
   PrimalMatrix primal = PrimalMatrix::sample(pparams);
 
-  primal.points = std::make_shared<std::vector<std::set<uint32_t>>>(
-    std::vector<std::set<uint32_t>>({
-      std::set<uint32_t>({0, 1}),
-      std::set<uint32_t>({0, 2}),
-      std::set<uint32_t>({0, 3}),
-      std::set<uint32_t>({1, 2}),
-      std::set<uint32_t>({1, 3}),
-      std::set<uint32_t>({2, 3}),
-      std::set<uint32_t>({0, 1}),
-      std::set<uint32_t>({0, 2}),
+  primal.points = std::make_shared<std::vector<std::vector<uint32_t>>>(
+    std::vector<std::vector<uint32_t>>({
+      std::vector<uint32_t>({0, 1}),
+      std::vector<uint32_t>({0, 2}),
+      std::vector<uint32_t>({0, 3}),
+      std::vector<uint32_t>({1, 2}),
+      std::vector<uint32_t>({1, 3}),
+      std::vector<uint32_t>({2, 3}),
+      std::vector<uint32_t>({0, 1}),
+      std::vector<uint32_t>({0, 2}),
     })
   );
 
@@ -165,16 +165,16 @@ TEST(LPNTests, SparseVectorMult) {
 
   BitString vector("1011");
 
-  matrix.points = std::make_shared<std::vector<std::set<uint32_t>>>(
-    std::vector<std::set<uint32_t>>({
-      std::set<uint32_t>({0, 1}),
-      std::set<uint32_t>({0, 2}),
-      std::set<uint32_t>({0, 3}),
-      std::set<uint32_t>({1, 2}),
-      std::set<uint32_t>({1, 3}),
-      std::set<uint32_t>({2, 3}),
-      std::set<uint32_t>({0, 1}),
-      std::set<uint32_t>({0, 2}),
+  matrix.points = std::make_shared<std::vector<std::vector<uint32_t>>>(
+    std::vector<std::vector<uint32_t>>({
+      std::vector<uint32_t>({0, 1}),
+      std::vector<uint32_t>({0, 2}),
+      std::vector<uint32_t>({0, 3}),
+      std::vector<uint32_t>({1, 2}),
+      std::vector<uint32_t>({1, 3}),
+      std::vector<uint32_t>({2, 3}),
+      std::vector<uint32_t>({0, 1}),
+      std::vector<uint32_t>({0, 2}),
     })
   );
 

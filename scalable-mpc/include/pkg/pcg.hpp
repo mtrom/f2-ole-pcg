@@ -73,7 +73,7 @@ private:
   std::unique_ptr<EqTest> eqtester;
 
   // pprfs for both pcg directions
-  std::vector<PPRF> send_eXs, recv_eXs;
+  PPRF send_eXs, recv_eXs;
   std::vector<DPF> send_eXas_eoe, recv_eXas_eoe;
   std::vector<DPF> send_eXas, recv_eXas;
 

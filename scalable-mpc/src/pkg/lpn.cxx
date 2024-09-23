@@ -68,7 +68,9 @@ bool SparseMatrix::operator[](std::pair<size_t, size_t> idx) const {
   if (idx.first >= (*this->points).size() || idx.second >= this->width) {
     throw std::domain_error("[SparseMatrix::operator[](std::pair)] idx out of range");
   }
-  return (*this->points)[idx.first].find(idx.second) != (*this->points)[idx.first].end();
+  return std::find(
+    (*this->points)[idx.first].begin(), (*this->points)[idx.first].end(), idx.second
+  ) != (*this->points)[idx.first].end();
 }
 
 BitString SparseMatrix::operator[](size_t idx) const {
@@ -129,8 +131,14 @@ PrimalMatrix::PrimalMatrix(const BitString& key, const PrimalParams& params)
   MULTI_TASK([this, &prf, &params](size_t start, size_t end) {
     for (size_t i = start; i < end; i++) {
       for (size_t j = 0; (*this->points)[i].size() < params.l; j++) {
-        (*this->points)[i].insert(prf(std::make_pair(i, j), params.k));
+        uint32_t point = prf(std::make_pair(i, j), params.k);
+        if (
+          std::find(points->at(i).begin(), points->at(i).end(), point) == points->at(i).end()
+        ) {
+          (*this->points)[i].push_back(point);
+        }
       }
+      std::sort((*this->points)[i].begin(), (*this->points)[i].end());
     }
   }, params.n);
 }

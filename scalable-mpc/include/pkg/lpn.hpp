@@ -1,6 +1,5 @@
 #pragma once
 
-#include <set>
 #include <memory>
 
 #include "util/bitstring.hpp"
@@ -63,7 +62,7 @@ public:
   BitString operator*(const BitString& other) const override;
 
   // directly get non-zero points
-  std::set<uint32_t> getNonZeroElements(size_t idx) const { return (*points)[idx]; }
+  std::vector<uint32_t> getNonZeroElements(size_t idx) const { return (*points)[idx]; }
 
   // matrix multiplication
   MatrixProduct operator*(const DenseMatrix& other) const;
@@ -75,10 +74,10 @@ public:
 protected:
   // just sets up initial fields
   SparseMatrix(size_t height, size_t width)
-    : width(width), points(std::make_shared<std::vector<std::set<uint32_t>>>(height)) { }
+    : width(width), points(std::make_shared<std::vector<std::vector<uint32_t>>>(height)) { }
 
   // all non-zero points (using shared pointer to prevent duplication in memory)
-  std::shared_ptr<std::vector<std::set<uint32_t>>> points;
+  std::shared_ptr<std::vector<std::vector<uint32_t>>> points;
   size_t width;
 };
 

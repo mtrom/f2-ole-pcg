@@ -17,7 +17,6 @@ const size_t THREAD_COUNT = []() {
     ? std::thread::hardware_concurrency()
     : DEFAULT_THREAD_COUNT
   );
-  count /= 2;
   std::cout << "[Info] using thread count " << count << std::endl;
   return count;
 }();
@@ -32,7 +31,7 @@ T TASK_REDUCE(
   std::function<T(std::vector<T>)> combine,
   size_t num_tasks
 ) {
-  // for tests where task sizes are small
+  // for cases where concurrency doesn't make sense
   if (num_tasks < 8 * THREAD_COUNT) { return combine(std::vector<T>{task(0, num_tasks)}); }
 
   std::vector<std::future<T>> futures(THREAD_COUNT);

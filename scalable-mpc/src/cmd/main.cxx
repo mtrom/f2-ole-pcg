@@ -1,92 +1,85 @@
-#include <future>
 #include <iostream>
-#include <utility>
 
-#include <boost/asio.hpp>
+#include <boost/program_options.hpp>
 
+#include "pkg/lpn.hpp"
+#include "pkg/pprf.hpp"
 #include "pkg/pcg.hpp"
-#include "pkg/rot.hpp"
-#include "pkg/svole.hpp"
 #include "util/bitstring.hpp"
 #include "util/defines.hpp"
+#include "util/random.hpp"
 #include "util/timer.hpp"
 
-
-#define BASE_PORT 3200
-#define COMM_SLEEP 500
-#define COMM_TIMEOUT 5000
-const uint32_t ALICE_ID = 0, BOB_ID = 1;
-
-#define ROTS 1024
-#define ROT_PORT 3000
-
-using address = boost::asio::ip::address;
-
-void run(const PCGParams& params) {
-
-  SocketPartyData asocket(address::from_string("127.0.0.1"), BASE_PORT);
-  SocketPartyData bsocket(address::from_string("127.0.0.1"), BASE_PORT + 1);
-
-  std::cout << "[Run] N = " << params.size << ", k = " << params.primal.k;
-  std::cout << ", t = " << params.primal.t << std::endl;
-
-  auto alice = std::async(std::launch::async, [asocket, bsocket, params]() {
-    boost::asio::io_service ios;
-    Channel channel = std::make_shared<CommPartyTCPSynced>(ios, asocket, bsocket);
-    channel->join(COMM_SLEEP, COMM_TIMEOUT);
-
-    Timer total("Total");
-
-    Timer ots("OT Ext");
-    RandomOTSender sender;
-    sender.run(ROTS, channel, ROT_PORT);
-
-    RandomOTReceiver receiver;
-    receiver.run(ROTS, channel, ROT_PORT);
-    ots.stop();
-
-    Beaver::PCG pcg(0, params);
-
-    std::pair<BitString, BitString> output = pcg.run(1, channel, sender, receiver);
-    total.stop();
-
-    std::pair<BitString, BitString> inputs = pcg.inputs();
-    return std::make_tuple(inputs.first, inputs.second, output.first, output.second);
-  });
-
-  auto bob = std::async(std::launch::async, [asocket, bsocket, params]() {
-    boost::asio::io_service ios;
-    Channel channel = std::make_shared<CommPartyTCPSynced>(ios, bsocket, asocket);
-    channel->join(COMM_SLEEP, COMM_TIMEOUT);
-
-    RandomOTReceiver receiver;
-    receiver.run(ROTS, channel, ROT_PORT);
-
-    RandomOTSender sender;
-    sender.run(ROTS, channel, ROT_PORT);
-
-    Beaver::PCG pcg(1, params);
-    std::pair<BitString, BitString> output = pcg.run(0, channel, sender, receiver);
-    std::pair<BitString, BitString> inputs = pcg.inputs();
-
-    return std::make_tuple(inputs.first, inputs.second, output.first, output.second);
-  });
-
-  BitString a0, a1, b0, b1, c0, c1, d0, d1;
-  std::tie(a0, b0, c0, d0) = alice.get();
-  std::tie(a1, b1, c1, d1) = bob.get();
-
-  if ((a0 & b1) == (c0 ^ c1) && (a1 & b0) == (d0 ^ d1)) {
-    std::cout << GREEN << "[Run] success." << RESET << std::endl;
-  } else {
-    std::cout << RED << "[Run] failure." << RESET << std::endl;
-  }
-}
+namespace options = boost::program_options;
 
 int main(int argc, char *argv[]) {
-  PCGParams params(
-    BitString::sample(LAMBDA), 1 << 10, 1 << 6, 1 << 5, 1 << 3,
-    BitString::sample(LAMBDA), 4, 7
-  );
-  run(params);
+  options::variables_map vm;
+  options::options_description desc("allowed options");
+
+  // Define the expected options
+  desc.add_options()
+    ("logN", options::value<unsigned>()->required(), "log of the number of triples to generate")
+    ("logk", options::value<unsigned>()->required(), "log of the size of primal LPN secret vector")
+    ("logtp", options::value<unsigned>()->required(), "log of the primal LPN error vector weight")
+    ("l", options::value<unsigned>()->required(), "row weight for primal LPN matrix")
+    ("c", options::value<unsigned>()->default_value(4), "compression rate of dual LPN")
+    (
+      "td", options::value<unsigned>()->default_value(32),
+      "dual LPN error vector weight"
+    );
+
+  try {
+    options::store(options::parse_command_line(argc, argv, desc), vm);
+
+    if (vm.count("help")) {
+      std::cout << desc << "\n";
+      return 0;
+    }
+
+    options::notify(vm);
+
+    unsigned logN = vm["logN"].as<unsigned>();
+    unsigned logk = vm["logk"].as<unsigned>();
+    unsigned logtp = vm["logtp"].as<unsigned>();
+    unsigned l = vm["l"].as<unsigned>();
+    unsigned c = vm["c"].as<unsigned>();
+    unsigned td = vm["td"].as<unsigned>();
+
+    PCGParams params(
+      BitString::sample(LAMBDA), 1 << logN, 1 << logk, 1 << logtp, l,
+      BitString::sample(LAMBDA), c, td
+    );
+    std::cout << params.toString() << std::endl;
+
+    Timer setup("[memcheck] setup");
+    Beaver::PCG pcg(0, params);
+    setup.stop();
+
+    std::cout << "           enter to continue..." << std::endl;
+    std::cin.get();
+
+    Timer prepare("[memcheck] prepare");
+    pcg.prepare();
+    prepare.stop();
+
+    std::cout << "           enter to continue..." << std::endl;
+    std::cin.get();
+
+    /*
+    std::cout << "[memcheck] starting..." << std::endl;
+    Timer a("[memcheck] sample primal");
+    LPN::PrimalMatrix A(params.pkey, params.primal);
+    a.stop();
+    std::cin.get();
+
+    Timer d("[memcheck] sample dual");
+    LPN::DualMatrix H(params.dkey, params.dual);
+    d.stop();
+    std::cin.get();
+    */
+
+  } catch (const options::error &ex) {
+    std::cerr << "[memcheck] error: " << ex.what() << std::endl;
+    return 1;
+  }
 }

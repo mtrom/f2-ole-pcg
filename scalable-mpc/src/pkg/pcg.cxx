@@ -31,8 +31,8 @@ namespace Beaver {
 
 std::pair<size_t, size_t> PCG::numOTs(uint32_t other_id) const {
   size_t pprfs = (
-   this->params.dual.t * ((size_t) ceil(log2(this->params.dual.N())) + 1)
-   + 2 * this->params.primal.t * ((size_t) ceil(log2(this->params.primal.blockSize())) + 1)
+   this->params.dual.t * ((size_t) ceil(log2(this->params.dual.N())))
+   + 2 * this->params.primal.t * ((size_t) ceil(log2(this->params.primal.blockSize())))
   );
   size_t eqtests = EqTest::numOTs(
     this->params.primal.errorBits(), this->params.eqTestThreshold, 2 * this->params.primal.t
@@ -85,17 +85,23 @@ PCG::PCG(uint32_t id, const PCGParams& params)
 }
 
 void PCG::prepare() {
+  std::cout << "[PCG::prepare] encrypt vectors" << std::endl;
   // encrypt secret vectors
   this->enc_s0 = this->ahe.encrypt(this->s0);
   this->enc_s1 = this->ahe.encrypt(this->s1);
 
+  std::cout << "[PCG::prepare] sample masks" << std::endl;
   // masks for (⟨aᵢ,s₁⟩ · e₀) and (⟨aᵢ,s₀⟩ · e₁) ⊕ (e₀ ○ e₁) terms
   this->send_masks = BitString::sample(this->params.primal.t);
   this->recv_masks = BitString::sample(this->params.primal.t);
 
   // initialize the pprfs that we are sending
+  std::cout << "[PCG::prepare] sample pprfs " << std::endl;
+  std::cout << "               eXs          " << std::endl;
   this->send_eXs = PPRF::sample(params.dual.t, LAMBDA, params.primal.k, params.dual.N());
+  std::cout << "               eXas_eoe     " << std::endl;
   this->send_eXas_eoe = DPF::sample(params.primal.t, LAMBDA, params.primal.blockSize());
+  std::cout << "               eXas         " << std::endl;
   this->send_eXas = DPF::sample(params.primal.t, LAMBDA, params.primal.blockSize());
 }
 
@@ -170,6 +176,12 @@ void PCG::online(
 }
 
 std::pair<BitString, BitString> PCG::finalize(size_t other_id) {
+
+  // expand out all received pprfs
+  this->recv_eXs.expand();
+  for (DPF& dpf : this->recv_eXas_eoe) { dpf.expand();  }
+  for (DPF& dpf : this->recv_eXas)     { dpf.expand();  }
+
   // in each direction, concatenate the image for each error block to get final output
   BitString send_out, recv_out;
   for (size_t i = 0; i < params.primal.t; i++) {
@@ -190,10 +202,8 @@ std::pair<BitString, BitString> PCG::finalize(size_t other_id) {
   MULTI_TASK([this, &send_eXs_matrix, &recv_eXs_matrix](size_t start, size_t end) {
     for (size_t c = start; c < end; c++) {
       for (size_t r = 0; r < params.dual.N(); r++) {
-        for (size_t p = 0; p < params.dual.t; p++) {
-          send_eXs_matrix[c][r] ^= this->send_eXs[p](r)[c];
-          recv_eXs_matrix[c][r] ^= this->recv_eXs[p](r)[c];
-        }
+        send_eXs_matrix[c][r] ^= this->send_eXs(r)[c];
+        recv_eXs_matrix[c][r] ^= this->recv_eXs(r)[c];
       }
     }
   }, params.primal.k);
@@ -256,8 +266,7 @@ std::vector<AHE::Ciphertext> PCG::homomorphicInnerProduct(
     uint32_t idx = (i * this->params.primal.blockSize()) + (sender ? this->e0[i] : this->e1[i]);
 
     // homomorphically compute the inner product of A[idx] and enc(s1)
-    std::set<uint32_t> pointset = this->A.getNonZeroElements(idx);
-    std::vector<uint32_t> points(pointset.begin(), pointset.end()); // TODO: don't need this?
+    std::vector<uint32_t> points = this->A.getNonZeroElements(idx);
     AHE::Ciphertext ctx = enc_s[points[0]];
     for (size_t i = 1; i < points.size(); i++) {
       ctx = this->ahe.add(ctx, enc_s[points[i]]);

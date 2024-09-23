@@ -11,99 +11,110 @@
 // P(unctured) P(seudo)R(andom) F(unction)
 class PPRF {
 public:
-  // initialize unpunctured with the given `key`
+  PPRF() { }
+
+  // initialize given the root `key`
   PPRF(BitString key, size_t outsize, size_t domainsize);
 
-  // initialize punctured at `x`
-  PPRF(std::vector<BitString> keys, uint32_t x, size_t outsize);
+  // initialize the pprf which has been punctured at `points`
+  PPRF(
+    std::vector<BitString> keys, std::vector<uint32_t> points, size_t outsize, size_t domainsize
+  );
 
-  // create `n` pprfs with randomly sampled keys
-  static std::vector<PPRF> sample(size_t n, size_t keysize, size_t outsize, size_t domainsize);
+  // create pprf with `n` puncture points with randomly sampled keys
+  static PPRF sample(size_t n, size_t keysize, size_t outsize, size_t domainsize);
 
   // evaluate the pprf on `x`
   BitString operator() (uint32_t x) const;
 
-  size_t domain() const { return domainsize; }
+  // expand a pprf that has been shared
+  void expand();
 
-  // free up the internal nodes (once they are not needed for puncturing)
-  void compress();
+  // combine two pprfs by xoring their output
+  PPRF& operator^=(const PPRF& other);
+
+  size_t domain() const { return domainsize; }
 
   // for debugging purposes
   std::string toString() const;
 
-  // share across `channel` where the other party is puncturing at a secret index with `payload`
+  // share across `channel` punctured according to `points` with output `payload`
   static void send(
-    PPRF pprf, BitString payload, std::shared_ptr<CommParty> channel, RandomOTSender rots
-  );
-
-  // batch sending
-  static void send(
-    std::vector<PPRF> pprfs, std::vector<BitString> payloads,
+    PPRF pprf, BitString payload,
     std::shared_ptr<CommParty> channel, RandomOTSender rots
   );
-
-  // batch sending with the same payload
-  static void send(
-    std::vector<PPRF> pprfs, BitString payload,
-    std::shared_ptr<CommParty> channel, RandomOTSender rots
-  );
-
-  // receive a pprf over `channel` and puncture at `x`
   static PPRF receive(
-      uint32_t x, size_t keysize, size_t outsize, size_t domainsize,
-      std::shared_ptr<CommParty> channel, RandomOTReceiver rots
-  );
-
-  // batch receiving
-  static std::vector<PPRF> receive(
-      std::vector<uint32_t> points, size_t keysize, size_t outsize, size_t domainsize,
-      std::shared_ptr<CommParty> channel, RandomOTReceiver rots
+    std::vector<uint32_t> points, size_t keysize, size_t outsize, size_t domainsize,
+    std::shared_ptr<CommParty> channel, RandomOTReceiver rots
   );
 protected:
-  vector<BitString> tree;
+  std::vector<std::pair<BitString, BitString>> levels;
+  std::shared_ptr<std::vector<BitString>> leafs;
 
   size_t keysize;
   size_t domainsize;
   size_t outsize;
   size_t depth;
 
-  bool compressed = false;
+  // whether we've done whole domain evaluation
+  bool expanded;
 
-  // get the left / right nodes on level `l` xor'd together
-  BitString getLeftXORd(size_t l) const;
-  BitString getRightXORd(size_t l) const;
-  std::pair<BitString, BitString> getLevelXORd(size_t l) const;
-
-  // get the index in tree for the `i`th node on the `l`th level
-  size_t getIndex(size_t l, size_t i) { return (1 << l) - 1 + i; }
-
-  // check if an index `i` is a leaf node
-  size_t isLeaf(size_t i) {
-    if (compressed) { return true; }
-    return i >= (1 << this->depth) - 1;
-  }
-
-  // fill out the tree rooted at index (e.g., fill(0) would populate the whole tree)
-  void fill(size_t index);
+  // point that has been punctured
+  std::vector<BitString> keys;
+  std::vector<uint32_t> points;
 };
 
 // D(istributed) P(oint) F(unction) (i.e., special case of pprf where the output is binary)
-class DPF : public PPRF {
+class DPF {
 public:
-  DPF(BitString key, size_t domainsize) : PPRF(key, 1, domainsize) { }
-  DPF(std::vector<BitString> keys, uint32_t x) : PPRF(keys, x, 1) { }
+  DPF() { }
+
+  // initialize given the root `key`
+  DPF(BitString key, size_t domainsize);
+
+  // initialize the dpf which has been punctured at `x`
+  DPF(std::vector<BitString> keys, uint32_t point);
+
+  // create `n` dpfs with randomly sampled keys
   static std::vector<DPF> sample(size_t n, size_t keysize, size_t domainsize);
 
-  // the truth table for the function
-  BitString image() const;
+  // expand a pprf that has been shared
+  void expand();
 
+  // the truth table for the function
+  BitString image() const {
+    if (!this->expanded) {
+      throw std::runtime_error("[DPF::image()] dpf has not been expanded yet");
+    }
+    return (*this->_image);
+  }
+
+  size_t domain() const { return domainsize; }
+
+  // share across `channel` punctured according to `points` with outputs `payloads`
   static void send(
     std::vector<DPF> dpfs, BitString payloads,
     std::shared_ptr<CommParty> channel, RandomOTSender rots
   );
 
   static std::vector<DPF> receive(
-      std::vector<uint32_t> points, size_t keysize, size_t domainsize,
-      std::shared_ptr<CommParty> channel, RandomOTReceiver rots
+    std::vector<uint32_t> points, size_t keysize, size_t domainsize,
+    std::shared_ptr<CommParty> channel, RandomOTReceiver rots
   );
+protected:
+  std::shared_ptr<BitString> _image;
+
+  // information required to send
+  std::vector<std::pair<BitString, BitString>> levels;
+
+  // seed used to expand punctured into full image
+  std::vector<BitString> keys;
+  uint32_t point;
+
+  size_t keysize;
+  size_t domainsize;
+  size_t depth;
+
+  // whether we've done whole domain evaluation
+  bool expanded;
 };

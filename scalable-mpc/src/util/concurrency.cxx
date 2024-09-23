@@ -1,6 +1,9 @@
 #include "util/concurrency.hpp"
 
 void MULTI_TASK(std::function<void(size_t, size_t)> func, size_t num_tasks) {
+  // for cases where concurrency doesn't make sense
+  if (num_tasks < 8 * THREAD_COUNT) { func(0, num_tasks); return; }
+
   std::vector<std::thread> threads;
 
   // Start all threads based on the determined THREAD_COUNT
