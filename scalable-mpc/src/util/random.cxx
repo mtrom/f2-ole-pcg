@@ -221,16 +221,16 @@ GaussianSampler::GaussianSampler(std::string filename) {
     if (!std::getline(file, line)) {
       throw std::runtime_error("[GaussianSampler] config file too short");
     }
-    total += std::stoi(line);
+    total += std::stol(line);
     this->zero_dist.push_back(BitString::fromUInt(total, this->bits));
   }
 
   // probability weights for each possible observation in the one distribution
-  for (uint32_t i = 0, total = 0; i < this->_tail; i++) {
+  for (uint64_t i = 0, total = 0; i < this->_tail; i++) {
     if (!std::getline(file, line)) {
       throw std::runtime_error("[GaussianSampler] config file too short");
     }
-    total += std::stoi(line);
+    total += std::stol(line);
     this->one_dist.push_back(BitString::fromUInt(total, this->bits));
   }
 }

@@ -18,6 +18,20 @@ AHE::AHE(size_t max_ops)
   EC::Number half;
   bn_rsh(half, this->curve.getOrder(), 1);
   this->one = EC::Point::mulGenerator(half + 1);
+
+  // construct lookup table for decryption
+  EC::Number zero;
+  bn_zero(zero);
+  EC::Point positives = EC::Point::mulGenerator(zero);
+  EC::Point negatives = EC::Point::mulGenerator(zero);
+  EC::Point g = this->curve.getGenerator();
+  lookup.push_back(positives);
+  for (size_t i = 0; i <= sampler.tail() * (max_ops + 1); i++) {
+    positives += g;
+    negatives = negatives - g;
+    lookup.push_back(positives);
+    lookup.push_back(negatives);
+  }
 }
 
 AHE::Ciphertext AHE::encrypt(bool plaintext) const {
@@ -88,19 +102,7 @@ AHE::Ciphertext AHE::multiply(AHE::Ciphertext c, uint64_t a) const {
 }
 
 bool AHE::isZero(const EC::Point& point) const {
-  // TODO: should this be precomputed?
-  EC::Number zero;
-  bn_zero(zero);
-
-  EC::Point positives = EC::Point::mulGenerator(zero);
-  EC::Point negatives = EC::Point::mulGenerator(zero);
-  EC::Point g = this->curve.getGenerator();
-  for (size_t i = 0; i <= sampler.tail() * max_ops; i++) {
-    if (positives == point || negatives == point) { return true; }
-    positives += g;
-    negatives = negatives - g;
-  }
-  return false;
+  return std::find(lookup.begin(), lookup.end(), point) != lookup.end();
 }
 
 ////////////////////////////////////////////////////////////////////////////////

@@ -49,6 +49,9 @@ private:
   // g^[q/2] where q is the group order
   EC::Point one;
 
+  // lookup table for decryption
+  std::vector<EC::Point> lookup;
+
   // for hashing to curve
   PRF<BitString> prf;
 
