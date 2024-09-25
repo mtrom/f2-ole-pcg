@@ -153,15 +153,15 @@ void runBoth(const PCGParams& params) {
     pcg.online(RECV_ID, channel, sender, receiver);
     online.stop();
 
+    float upload = (float) channel->bytesIn / 1000000;
+    float download = (float) channel->bytesOut / 1000000;
+    std::cout << "[offline] upload   = " << upload << "MB" << std::endl;
+    std::cout << "          download = " << download << "MB" << std::endl;
+    std::cout << "          total    = " << (upload + download) << "MB" << std::endl;
+
     Timer finalize("[offline] finalize");
     std::pair<BitString, BitString> output = pcg.finalize(RECV_ID);
     finalize.stop();
-
-    float upload = (float) channel->bytesIn / 1000000;
-    float download = (float) channel->bytesOut / 1000000;
-    std::cout << "[offline] Upload   = " << upload << "MB" << std::endl;
-    std::cout << "          Download = " << download << "MB" << std::endl;
-    std::cout << "          Total    = " << (upload + download) << "MB" << std::endl;
 
     std::pair<BitString, BitString> inputs = pcg.inputs();
     return std::make_tuple(inputs.first, inputs.second, output.first, output.second);
