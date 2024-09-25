@@ -70,7 +70,6 @@ void PCG::prepare() {
   // sample public matrices
   this->A = LPN::PrimalMatrix(params.pkey, params.primal);
   this->H = LPN::DualMatrix(params.dkey, params.dual);
-  this->B = LPN::MatrixProduct(A, H);
 
   // sample primal error vectors
   this->e0 = sampleVector(params.primal.t, params.primal.blockSize());
@@ -86,9 +85,12 @@ void PCG::prepare() {
   this->s1 = BitString(params.primal.k);
   for (size_t i = 0; i < params.primal.k; i++) {
     for (uint32_t error : this->epsilon) {
-      if (H[{i, error}]) { this->s1[i] ^= 1; }
+      if (this->H[{i, error}]) { this->s1[i] ^= 1; }
     }
   }
+
+  // free up this space as it is needed later
+  this->H = LPN::DualMatrix();
 
   // encrypt secret vectors
   this->enc_s0 = this->ahe.encrypt(this->s0);
@@ -207,6 +209,10 @@ std::pair<BitString, BitString> PCG::finalize(size_t other_id) {
   for (DPF& dpf : this->recv_eXas_eoe) { dpf.clear(); }
   for (DPF& dpf : this->send_eXas)     { dpf.clear(); }
   for (DPF& dpf : this->recv_eXas)     { dpf.clear(); }
+
+  // recompute dual matrix needed for next step
+  this->H = LPN::DualMatrix(params.dkey, params.dual);
+  this->B = LPN::MatrixProduct(A, H);
 
   // compute shares of the ⟨bᵢ⊗ aᵢ,ε ⊗ s⟩ vector
   auto baex_shares = TASK_REDUCE<std::pair<BitString, BitString>>(
