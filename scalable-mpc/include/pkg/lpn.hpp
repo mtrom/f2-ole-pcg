@@ -55,6 +55,7 @@ protected:
 // matrix with a constant number of non-zero elements per row
 class SparseMatrix : public Matrix {
 public:
+  SparseMatrix() { }
   // basic operations
   bool operator[](std::pair<size_t, size_t> idx) const override;
   BitString operator[](size_t idx) const override;
@@ -105,6 +106,7 @@ private:
 
 class MatrixProduct {
 public:
+  MatrixProduct() { }
   MatrixProduct(SparseMatrix sparse, DenseMatrix dense) : sparse(sparse), dense(dense) {
     if (sparse.dim().second != dense.dim().first) {
       throw std::domain_error("[MatrixProduct] matrix dimensions mismatched");

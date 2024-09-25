@@ -91,6 +91,8 @@ public:
 
   size_t domain() const { return domainsize; }
 
+  void clear() { _image.reset(); levels.clear(); keys.clear(); }
+
   // share across `channel` punctured according to `points` with outputs `payloads`
   static void send(
     std::vector<DPF> dpfs, BitString payloads,

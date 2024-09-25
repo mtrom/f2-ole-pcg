@@ -114,8 +114,8 @@ TEST_F(AHETests, SendAndReceiveCompressed) {
       return receiver.receive(expected.size(), this->rch, true);
     }
   );
+  EC::Curve curve;
   AHE encrypter = results.first;
   BitString actual = encrypter.decrypt(results.second);
   ASSERT_EQ(expected, actual);
 }
-

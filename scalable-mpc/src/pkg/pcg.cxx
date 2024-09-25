@@ -61,10 +61,17 @@ std::pair<BitString, BitString> PCG::inputs() const {
 // PCG PROTOCOL METHODS
 ////////////////////////////////////////////////////////////////////////////////
 
-PCG::PCG(uint32_t id, const PCGParams& params)
-  : id(id), params(params), ahe(params.primal.k), A(params.pkey, params.primal),
-    H(params.dkey, params.dual), B(A, H)
-{
+void PCG::prepare() {
+  // initialize the pprfs that we are sending
+  this->send_eXs = PPRF::sample(params.dual.t, LAMBDA, params.primal.k, params.dual.N());
+  this->send_eXas_eoe = DPF::sample(params.primal.t, LAMBDA, params.primal.blockSize());
+  this->send_eXas = DPF::sample(params.primal.t, LAMBDA, params.primal.blockSize());
+
+  // sample public matrices
+  this->A = LPN::PrimalMatrix(params.pkey, params.primal);
+  this->H = LPN::DualMatrix(params.dkey, params.dual);
+  this->B = LPN::MatrixProduct(A, H);
+
   // sample primal error vectors
   this->e0 = sampleVector(params.primal.t, params.primal.blockSize());
   this->e1 = sampleVector(params.primal.t, params.primal.blockSize());
@@ -82,27 +89,15 @@ PCG::PCG(uint32_t id, const PCGParams& params)
       if (H[{i, error}]) { this->s1[i] ^= 1; }
     }
   }
-}
 
-void PCG::prepare() {
-  std::cout << "[PCG::prepare] encrypt vectors" << std::endl;
   // encrypt secret vectors
   this->enc_s0 = this->ahe.encrypt(this->s0);
   this->enc_s1 = this->ahe.encrypt(this->s1);
 
-  std::cout << "[PCG::prepare] sample masks" << std::endl;
   // masks for (⟨aᵢ,s₁⟩ · e₀) and (⟨aᵢ,s₀⟩ · e₁) ⊕ (e₀ ○ e₁) terms
   this->send_masks = BitString::sample(this->params.primal.t);
   this->recv_masks = BitString::sample(this->params.primal.t);
 
-  // initialize the pprfs that we are sending
-  std::cout << "[PCG::prepare] sample pprfs " << std::endl;
-  std::cout << "               eXs          " << std::endl;
-  this->send_eXs = PPRF::sample(params.dual.t, LAMBDA, params.primal.k, params.dual.N());
-  std::cout << "               eXas_eoe     " << std::endl;
-  this->send_eXas_eoe = DPF::sample(params.primal.t, LAMBDA, params.primal.blockSize());
-  std::cout << "               eXas         " << std::endl;
-  this->send_eXas = DPF::sample(params.primal.t, LAMBDA, params.primal.blockSize());
 }
 
 void PCG::online(
@@ -127,16 +122,20 @@ void PCG::online(
   // exchange encrypted secret vectors Enc(s₀) and Enc(s₁)
   std::vector<AHE::Ciphertext> other_enc_s0, other_enc_s1;
   ORDER_BY_ROLE({
-    this->ahe.send(this->enc_s0, channel);
-    this->ahe.send(this->enc_s1, channel);
+    this->ahe.send(this->enc_s0, channel, true);
+    this->ahe.send(this->enc_s1, channel, true);
+    this->enc_s0.clear();
+    this->enc_s1.clear();
   }, {
-    other_enc_s0 = this->ahe.receive(this->params.primal.k, channel);
-    other_enc_s1 = this->ahe.receive(this->params.primal.k, channel);
+    other_enc_s0 = this->ahe.receive(this->params.primal.k, channel, true);
+    other_enc_s1 = this->ahe.receive(this->params.primal.k, channel, true);
   });
 
   // homomorphically compute Enc(⟨aᵢ,s⟩) for both directions
   std::vector<AHE::Ciphertext> enc_recv_eXas = homomorphicInnerProduct(other_enc_s1, true);
   std::vector<AHE::Ciphertext> enc_send_eXas = homomorphicInnerProduct(other_enc_s0, false);
+  other_enc_s0.clear();
+  other_enc_s1.clear();
 
   // swap Enc(⟨aᵢ,s₀⟩) and Enc(⟨aᵢ,s₁⟩)
   std::vector<AHE::Ciphertext> send_resp, recv_resp;
@@ -150,6 +149,8 @@ void PCG::online(
 
   BitString send_decrypted = this->ahe.decrypt(send_resp);
   BitString recv_decrypted = this->ahe.decrypt(recv_resp);
+  send_resp.clear();
+  recv_resp.clear();
 
   // exchange dpfs for both terms
   ORDER_BY_ROLE({
@@ -163,6 +164,11 @@ void PCG::online(
     );
     DPF::send(this->send_eXas, recv_decrypted, channel, srots);
   });
+
+  // free up some memory
+  this->send_eoe.clear();
+  recv_decrypted.clear();
+  send_decrypted.clear();
 
   //////// ⟨bᵢ⊗ aᵢ,ε ⊗ s⟩ TERM //////////////////////
 
@@ -179,8 +185,8 @@ std::pair<BitString, BitString> PCG::finalize(size_t other_id) {
 
   // expand out all received pprfs
   this->recv_eXs.expand();
-  for (DPF& dpf : this->recv_eXas_eoe) { dpf.expand();  }
-  for (DPF& dpf : this->recv_eXas)     { dpf.expand();  }
+  for (DPF& dpf : this->recv_eXas_eoe) { dpf.expand(); }
+  for (DPF& dpf : this->recv_eXas)     { dpf.expand(); }
 
   // in each direction, concatenate the image for each error block to get final output
   BitString send_out, recv_out;
@@ -196,32 +202,24 @@ std::pair<BitString, BitString> PCG::finalize(size_t other_id) {
     recv_out += recv_image;
   }
 
-  // arrange our shares of the ε ⊗ s matrix by column
-  std::vector<BitString> send_eXs_matrix(params.primal.k, BitString(params.dual.N()));
-  std::vector<BitString> recv_eXs_matrix(params.primal.k, BitString(params.dual.N()));
-  MULTI_TASK([this, &send_eXs_matrix, &recv_eXs_matrix](size_t start, size_t end) {
-    for (size_t c = start; c < end; c++) {
-      for (size_t r = 0; r < params.dual.N(); r++) {
-        send_eXs_matrix[c][r] ^= this->send_eXs(r)[c];
-        recv_eXs_matrix[c][r] ^= this->recv_eXs(r)[c];
-      }
-    }
-  }, params.primal.k);
+  // free up used memory
+  for (DPF& dpf : this->send_eXas_eoe) { dpf.clear(); }
+  for (DPF& dpf : this->recv_eXas_eoe) { dpf.clear(); }
+  for (DPF& dpf : this->send_eXas)     { dpf.clear(); }
+  for (DPF& dpf : this->recv_eXas)     { dpf.clear(); }
 
-  // then use those to compute shares of the ⟨bᵢ⊗ aᵢ,ε ⊗ s⟩ vector
+  // compute shares of the ⟨bᵢ⊗ aᵢ,ε ⊗ s⟩ vector
   auto baex_shares = TASK_REDUCE<std::pair<BitString, BitString>>(
-    [this, &send_eXs_matrix, &recv_eXs_matrix](size_t start, size_t end)
+    [this](size_t start, size_t end)
   {
     BitString send_out(end - start), recv_out(end - start);
     for (size_t i = start; i < end; i++) {
-      BitString send_aXeXs, recv_aXeXs;
+      BitString send_aXeXs(params.dual.N()), recv_aXeXs(params.dual.N());
       for (uint32_t idx : this->A.getNonZeroElements(i)) {
-        if (send_aXeXs.size() == 0) {
-          send_aXeXs = send_eXs_matrix[idx];
-          recv_aXeXs = recv_eXs_matrix[idx];
-        } else {
-          send_aXeXs ^= send_eXs_matrix[idx];
-          recv_aXeXs ^= recv_eXs_matrix[idx];
+        // combine columns of the ε ⊗ s matrix
+        for (size_t row = 0; row < params.dual.N(); row++) {
+          send_aXeXs[row] ^= this->send_eXs(row)[idx];
+          recv_aXeXs[row] ^= this->recv_eXs(row)[idx];
         }
       }
       BitString row = this->B[i];

@@ -20,7 +20,7 @@ namespace Beaver {
 
 class PCG {
 public:
-  PCG(uint32_t id, const PCGParams& params);
+  PCG(uint32_t id, const PCGParams& params) : id(id), params(params), ahe(params.primal.k) { }
 
   // non-interactive steps to prepare for the protocol
   void prepare();

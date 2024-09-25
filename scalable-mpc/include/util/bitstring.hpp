@@ -114,6 +114,7 @@ public:
   unsigned char* data() { return bytes.data(); }
   std::vector<unsigned char>::iterator begin() { return bytes.begin(); }
   std::vector<unsigned char>::iterator end() { return bytes.end(); }
+  void clear() { bytes.clear(); size_ = 0; }
 
   size_t nBytes() const { return bytes.size(); }
   std::vector<unsigned char> toBytes() const { return bytes; }

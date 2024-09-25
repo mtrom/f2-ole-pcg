@@ -132,11 +132,9 @@ void AHE::send(std::vector<AHE::Ciphertext> ciphertexts, Channel channel, bool c
 
 std::vector<AHE::Ciphertext> AHE::receive(size_t n, Channel channel, bool compress) {
 
-  if (compress) {
-    std::vector<unsigned char> key(LAMBDA / 8);
-    channel->read(key.data(), key.size());
-    this->prf.setKey(key);
-  }
+  std::vector<unsigned char> key(LAMBDA / 8);
+  if (compress) { channel->read(key.data(), key.size()); }
+  PRF<BitString> their_prf(key);
 
   size_t size = EC::Point::size * n * (compress ? 1 : 2);
   std::vector<unsigned char> message(size);
@@ -150,7 +148,7 @@ std::vector<AHE::Ciphertext> AHE::receive(size_t n, Channel channel, bool compre
       first.fromBytes(iter);
       iter += EC::Point::size;
     } else {
-      BitString seed = this->prf(i, EC::Point::fromHashLength * 8);
+      BitString seed = their_prf(i, EC::Point::fromHashLength * 8);
       first = EC::Point::fromHash(seed.data());
     }
     second.fromBytes(iter);
