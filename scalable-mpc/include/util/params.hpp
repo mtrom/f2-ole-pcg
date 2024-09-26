@@ -87,6 +87,11 @@ public:
     BitString dkey, float c, size_t td
   ) : size(size), primal(n, k, tp, l), pkey(pkey), dual(k, c, td), dkey(dkey) { }
 
+  PCGParams(
+    BitString pkey, size_t n, size_t k, size_t tp, size_t l,
+    BitString dkey, float c, size_t td
+  ) : PCGParams(n, pkey, n, k, tp, l, dkey, c, td) { }
+
   // number of correlations to output
   size_t size;
 
