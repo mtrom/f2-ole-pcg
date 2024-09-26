@@ -67,7 +67,7 @@ public:
   size_t N() const { return (size_t) ceil(n * c); }
 
   // number of bits per error block
-  size_t blockSize() const { return (size_t) ceil(n / t); }
+  size_t blockSize() const { return (size_t) ceil(N() / t); }
 
   std::string toString() const {
     std::ostringstream out;
@@ -109,6 +109,10 @@ public:
   // parameter for equality testing
   // TODO: what should this value be?
   size_t eqTestThreshold = 3;
+
+  size_t blocks() {
+    return (size_t) ceil(size / primal.blockSize());
+  }
 
   std::string toString() const {
     return (

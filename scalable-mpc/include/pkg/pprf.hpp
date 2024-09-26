@@ -50,9 +50,18 @@ public:
     PPRF pprf, BitString payload,
     std::shared_ptr<CommParty> channel, RandomOTSender rots
   );
+  static void send(
+    std::vector<PPRF> pprf, BitString payload,
+    std::shared_ptr<CommParty> channel, RandomOTSender rots
+  );
   static PPRF receive(
     std::vector<uint32_t> points, size_t keysize, size_t outsize, size_t domainsize,
     std::shared_ptr<CommParty> channel, RandomOTReceiver rots
+  );
+  // TODO: delete me needs to be dealt with
+  static std::vector<PPRF> receive(
+    std::vector<uint32_t> points, size_t keysize, size_t outsize, size_t domainsize,
+    std::shared_ptr<CommParty> channel, RandomOTReceiver rots, bool deleteme
   );
 protected:
   std::vector<std::pair<BitString, BitString>> levels;

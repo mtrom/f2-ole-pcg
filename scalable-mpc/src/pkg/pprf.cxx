@@ -212,6 +212,35 @@ void PPRF::send(
   rots.transfer(messages, channel);
 }
 
+void PPRF::send(
+  std::vector<PPRF> pprfs,
+  BitString payload,
+  std::shared_ptr<CommParty> channel,
+  RandomOTSender rots
+) {
+
+  std::vector<std::pair<BitString, BitString>> messages;
+  for (const PPRF& pprf : pprfs) {
+    if (payload.size() != pprf.outsize) {
+      throw std::invalid_argument("[PPRF::send()] payload size does not match pprf output size");
+    }
+
+    for (size_t i = 0; i < pprf.levels.size(); i++) {
+      if (i % (pprf.depth + 1) == pprf.depth) {
+        // leaf level is xor'd with payload
+        messages.push_back(std::make_pair(
+          pprf.levels[i].first ^ payload, pprf.levels[i].second ^ payload
+        ));
+      } else {
+        messages.push_back(pprf.levels[i]);
+      }
+    }
+  }
+
+  // do the oblivious transfer
+  rots.transfer(messages, channel);
+}
+
 PPRF PPRF::receive(
   std::vector<uint32_t> points, size_t keysize, size_t outsize, size_t domainsize,
   std::shared_ptr<CommParty> channel, RandomOTReceiver rots
@@ -239,6 +268,44 @@ PPRF PPRF::receive(
 
   return PPRF(keys, points, outsize, domainsize);
 }
+
+std::vector<PPRF> PPRF::receive(
+  std::vector<uint32_t> points, size_t keysize, size_t outsize, size_t domainsize,
+  std::shared_ptr<CommParty> channel, RandomOTReceiver rots, bool deleteme
+) {
+  size_t depth = (size_t) ceil(log2(domainsize));
+  BitString choices;
+
+  std::vector<size_t> sizes;
+
+  for (const size_t& x : points) {
+    // want the sibling nodes for the path to `x`
+    choices += BitString::fromUInt(~x, depth).reverse();
+
+    // except the payload which should be the punctured leaf node
+    choices += (!choices[choices.size() - 1]);
+
+    // most of the ots are `keysize`-bit but the last is the `outsize` for the leaf layer
+    std::vector<size_t> branches(depth, keysize);
+    sizes.insert(sizes.end(), branches.begin(), branches.end());
+    sizes.push_back(outsize);
+  }
+
+  // do the oblivious transfer
+  std::vector<BitString> allkeys = rots.transfer(choices, sizes, channel);
+
+  std::vector<PPRF> pprfs;
+  for (size_t i = 0; i < points.size(); i++) {
+    std::vector<BitString> keys(
+      allkeys.begin() + i * (depth + 1),
+      allkeys.begin() + (i + 1) * (depth + 1)
+    );
+    pprfs.push_back(PPRF(keys, std::vector<uint32_t>({points[i]}), outsize, domainsize));
+  }
+
+  return pprfs;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // DPF / D2PF SPECIFIC FUNCTIONS

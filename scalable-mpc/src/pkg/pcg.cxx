@@ -54,7 +54,7 @@ std::pair<BitString, BitString> PCG::inputs() const {
     a[(i * params.primal.blockSize()) + this->e0[i]] ^= 1;
     b[(i * params.primal.blockSize()) + this->e1[i]] ^= 1;
   }
-  return std::make_pair(a, b);
+  return std::make_pair(a[{0, params.size}], b[{0, params.size}]);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -63,7 +63,9 @@ std::pair<BitString, BitString> PCG::inputs() const {
 
 void PCG::prepare() {
   // initialize the pprfs that we are sending
-  this->send_eXs = PPRF::sample(params.dual.t, LAMBDA, params.primal.k, params.dual.N());
+  this->send_eXs = PPRF::sampleMany(
+    params.dual.t, LAMBDA, params.primal.k, params.dual.blockSize()
+  );
   this->send_eXas_eoe = DPF::sample(params.primal.t, LAMBDA, params.primal.blockSize());
   this->send_eXas = DPF::sample(params.primal.t, LAMBDA, params.primal.blockSize());
 
@@ -76,7 +78,7 @@ void PCG::prepare() {
   this->e1 = sampleVector(params.primal.t, params.primal.blockSize());
 
   // sample dual error vector
-  this->epsilon = sampleDistinct(params.dual.t, params.dual.N());
+  this->epsilon = sampleVector(params.dual.t, params.dual.blockSize());
 
   // sample one primal secret vector
   this->s0 = BitString::sample(params.primal.k);
@@ -178,21 +180,25 @@ void PCG::online(
     PPRF::send(this->send_eXs, this->s0, channel, srots);
   }, {
     this->recv_eXs = PPRF::receive(
-      this->epsilon, LAMBDA, params.primal.k, params.dual.N(), channel, rrots
+      this->epsilon, LAMBDA, params.primal.k, params.dual.blockSize(), channel, rrots, true
     );
   });
 }
 
 std::pair<BitString, BitString> PCG::finalize(size_t other_id) {
 
-  // expand out all received pprfs
-  this->recv_eXs.expand();
-  for (DPF& dpf : this->recv_eXas_eoe) { dpf.expand(); }
-  for (DPF& dpf : this->recv_eXas)     { dpf.expand(); }
+  // expand out ⟨ε ⊗ s⟩ pprfs
+  for (PPRF& pprf : this->recv_eXs) { pprf.expand(); }
+
+  // expand only the other pprfs that are needed
+  for (size_t i = 0; i < params.blocks(); i++) {
+    this->recv_eXas_eoe[i].expand();
+    this->recv_eXas[i].expand();
+  }
 
   // in each direction, concatenate the image for each error block to get final output
   BitString send_out, recv_out;
-  for (size_t i = 0; i < params.primal.t; i++) {
+  for (size_t i = 0; i < params.blocks(); i++) {
     BitString send_image = this->send_eXas_eoe[i].image() ^ this->recv_eXas[i].image();
     BitString recv_image = this->recv_eXas_eoe[i].image() ^ this->send_eXas[i].image();
 
@@ -214,22 +220,26 @@ std::pair<BitString, BitString> PCG::finalize(size_t other_id) {
   std::vector<BitString> send_eXs_matrix(params.primal.k, BitString(params.dual.N()));
   MULTI_TASK([this, &send_eXs_matrix](size_t start, size_t end) {
     for (size_t c = start; c < end; c++) {
-      for (size_t r = 0; r < params.dual.N(); r++) {
-        send_eXs_matrix[c][r] ^= this->send_eXs(r)[c];
+      for (size_t p = 0; p < params.dual.t; p++) {
+        for (size_t r = 0; r < params.dual.blockSize(); r++) {
+          send_eXs_matrix[c][r] ^= this->send_eXs[p](r)[c];
+        }
       }
     }
   }, params.primal.k);
-  this->send_eXs.clear();
+  for (PPRF& pprf : this->send_eXs) { pprf.clear(); }
 
   std::vector<BitString> recv_eXs_matrix(params.primal.k, BitString(params.dual.N()));
   MULTI_TASK([this, &recv_eXs_matrix](size_t start, size_t end) {
     for (size_t c = start; c < end; c++) {
-      for (size_t r = 0; r < params.dual.N(); r++) {
-        recv_eXs_matrix[c][r] ^= this->recv_eXs(r)[c];
+      for (size_t p = 0; p < params.dual.t; p++) {
+        for (size_t r = 0; r < params.dual.blockSize(); r++) {
+          recv_eXs_matrix[c][r] ^= this->recv_eXs[p](r)[c];
+        }
       }
     }
   }, params.primal.k);
-  this->recv_eXs.clear();
+  for (PPRF& pprf : this->recv_eXs) { pprf.clear(); }
 
   // recompute dual matrix needed for next step
   this->H = LPN::DualMatrix(params.dkey, params.dual);
