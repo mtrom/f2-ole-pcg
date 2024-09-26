@@ -35,6 +35,8 @@ public:
 
   size_t domain() const { return domainsize; }
 
+  void clear() { leafs.reset(); levels.clear(); keys.clear(); points.clear(); }
+
   // for debugging purposes
   std::string toString() const;
 

@@ -210,23 +210,41 @@ std::pair<BitString, BitString> PCG::finalize(size_t other_id) {
   for (DPF& dpf : this->send_eXas)     { dpf.clear(); }
   for (DPF& dpf : this->recv_eXas)     { dpf.clear(); }
 
+  // arrange our shares of the ε ⊗ s matrix by column
+  std::vector<BitString> send_eXs_matrix(params.primal.k, BitString(params.dual.N()));
+  MULTI_TASK([this, &send_eXs_matrix](size_t start, size_t end) {
+    for (size_t c = start; c < end; c++) {
+      for (size_t r = 0; r < params.dual.N(); r++) {
+        send_eXs_matrix[c][r] ^= this->send_eXs(r)[c];
+      }
+    }
+  }, params.primal.k);
+  this->send_eXs.clear();
+
+  std::vector<BitString> recv_eXs_matrix(params.primal.k, BitString(params.dual.N()));
+  MULTI_TASK([this, &recv_eXs_matrix](size_t start, size_t end) {
+    for (size_t c = start; c < end; c++) {
+      for (size_t r = 0; r < params.dual.N(); r++) {
+        recv_eXs_matrix[c][r] ^= this->recv_eXs(r)[c];
+      }
+    }
+  }, params.primal.k);
+  this->recv_eXs.clear();
+
   // recompute dual matrix needed for next step
   this->H = LPN::DualMatrix(params.dkey, params.dual);
   this->B = LPN::MatrixProduct(A, H);
 
   // compute shares of the ⟨bᵢ⊗ aᵢ,ε ⊗ s⟩ vector
   auto baex_shares = TASK_REDUCE<std::pair<BitString, BitString>>(
-    [this](size_t start, size_t end)
+    [this, &send_eXs_matrix, &recv_eXs_matrix](size_t start, size_t end)
   {
     BitString send_out(end - start), recv_out(end - start);
     for (size_t i = start; i < end; i++) {
       BitString send_aXeXs(params.dual.N()), recv_aXeXs(params.dual.N());
       for (uint32_t idx : this->A.getNonZeroElements(i)) {
-        // combine columns of the ε ⊗ s matrix
-        for (size_t row = 0; row < params.dual.N(); row++) {
-          send_aXeXs[row] ^= this->send_eXs(row)[idx];
-          recv_aXeXs[row] ^= this->recv_eXs(row)[idx];
-        }
+        send_aXeXs ^= send_eXs_matrix[idx];
+        recv_aXeXs ^= recv_eXs_matrix[idx];
       }
       BitString row = this->B[i];
       send_out[i - start] = row * send_aXeXs;
