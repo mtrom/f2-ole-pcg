@@ -31,7 +31,7 @@ namespace Beaver {
 
 std::pair<size_t, size_t> PCG::numOTs(uint32_t other_id) const {
   size_t pprfs = (
-   this->params.dual.t * ((size_t) ceil(log2(this->params.dual.N())))
+   this->params.dual.t * ((size_t) ceil(log2(this->params.dual.N())) + 1)
    + 2 * this->params.primal.t * ((size_t) ceil(log2(this->params.primal.blockSize())))
   );
   size_t eqtests = EqTest::numOTs(

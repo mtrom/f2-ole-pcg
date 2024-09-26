@@ -61,10 +61,9 @@ TEST_F(PPRFTests, ConstructPunctured) {
   const size_t depth = 3;
   const size_t x = 5;
   std::vector<BitString> keys;
-  for (size_t i = 0; i < depth - 1; i++) {
+  for (size_t i = 0; i < depth + 1; i++) {
     keys.push_back(BitString::sample(LAMBDA));
   }
-  keys.push_back(BitString::sample(LAMBDA * 2));
 
   PPRF pprf(keys, std::vector<uint32_t>({x}), LAMBDA, 1 << depth);
 
@@ -80,10 +79,9 @@ TEST_F(PPRFTests, EvalSamePuncturedKeySameOutput) {
   const size_t depth = 3;
   const size_t x = 5;
   std::vector<BitString> keys;
-  for (size_t i = 0; i < depth - 1; i++) {
+  for (size_t i = 0; i < depth + 1; i++) {
     keys.push_back(BitString::sample(LAMBDA));
   }
-  keys.push_back(BitString::sample(LAMBDA * 2));
 
   PPRF a(keys, std::vector<uint32_t>({x}), LAMBDA, 1 << depth);
   PPRF b(keys, std::vector<uint32_t>({x}), LAMBDA, 1 << depth);

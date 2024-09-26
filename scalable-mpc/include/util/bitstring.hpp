@@ -134,6 +134,11 @@ public:
   // using this as a key, expand to `size` bits using aes
   BitString aes(size_t size);
 
+  // helper for concurrency
+  static std::pair<BitString, BitString> xor_combine(
+    const std::vector<std::pair<BitString, BitString>>& in
+  );
+
   // for testing & debugging purposes
   BitString(const std::string& str);
   std::string toString() const;

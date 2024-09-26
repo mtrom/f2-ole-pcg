@@ -11,42 +11,49 @@ PPRF::PPRF(BitString key, size_t outsize, size_t domainsize)
 {
   std::vector<BitString> seed({key});
   this->leafs = std::make_shared<std::vector<BitString>>(seed);
-  this->levels.resize(depth);
+  this->levels.resize(depth + 1);
 
   // expand the tree but only hold onto the last level evaluated
   for (size_t l = 0; l < depth; l++) {
     auto next = std::make_shared<std::vector<BitString>>(this->leafs->size() * 2);
-    size_t nodesize = (l == depth - 1) ? this->outsize : this->keysize;
 
     // concurrently expand out the level at this depth
     auto xors = TASK_REDUCE<std::pair<BitString, BitString>>(
-      [this, &l, &next, &nodesize](size_t start, size_t end)
+      [this, &l, &next](size_t start, size_t end)
     {
-      BitString left(nodesize);
-      BitString right(nodesize);
+      BitString left(this->keysize), right(this->keysize);
       for (size_t i = start; i < end; i++) {
         PRF<BitString> prf((*this->leafs)[i]);
-        (*next)[2 * i] = prf(0, nodesize);
-        (*next)[2 * i + 1] = prf(1, nodesize);
+        (*next)[2 * i] = prf(0, this->keysize);
+        (*next)[2 * i + 1] = prf(1, this->keysize);
 
         left ^= (*next)[2 * i];
         right ^= (*next)[2 * i + 1];
       }
       return std::make_pair(left, right);
-    }, [&nodesize](const std::vector<std::pair<BitString, BitString>>& results) {
-      BitString left = results[0].first;
-      BitString right = results[0].second;
-      for (size_t i = 1; i < results.size(); i++) {
-        left ^= results[i].first;
-        right ^= results[i].second;
-      }
-      return std::make_pair(left, right);
-    }, this->leafs->size());
+    }, BitString::xor_combine, this->leafs->size());
 
     // save the left and right xors
     this->levels[l] = std::make_pair(xors.first, xors.second);
     this->leafs = next;
   }
+
+  // expand leafs to the specified `outsize`
+  auto leaf_xors = TASK_REDUCE<std::pair<BitString, BitString>>(
+    [this](size_t start, size_t end)
+  {
+    BitString left(this->outsize), right(this->outsize);
+    for (size_t i = start; i < end; i++) {
+      PRF<BitString> prf((*this->leafs)[i]);
+      (*this->leafs)[i] = prf(0, this->outsize);
+      if (i % 2 == 0) { left ^= (*this->leafs)[i]; }
+      else            { right ^= (*this->leafs)[i]; }
+    }
+    return std::make_pair(left, right);
+  }, BitString::xor_combine, this->leafs->size());
+
+  this->levels[this->depth] = std::make_pair(leaf_xors.first, leaf_xors.second);
+
   this->expanded = true;
 }
 
@@ -64,15 +71,13 @@ void PPRF::expand() {
 
     for (size_t l = 0; l < depth; l++) {
       auto next = std::make_shared<std::vector<BitString>>(previous->size() * 2);
-      size_t nodesize = (l == depth - 1) ? this->outsize : this->keysize;
       size_t sibling;
 
       // concurrently expand out the level at this depth
       auto xors = TASK_REDUCE<std::pair<BitString, BitString>>(
-        [this, &path, &previous, &l, &next, &nodesize, &sibling](size_t start, size_t end)
+        [this, &path, &previous, &l, &next, &sibling](size_t start, size_t end)
       {
-        BitString left(nodesize);
-        BitString right(nodesize);
+        BitString left(this->keysize), right(this->keysize);
         for (size_t j = start; j < end; j++) {
           // if at the puncture point just insert the key for that
           if ((*previous)[j].size() == 0 && !path[l]) {
@@ -81,37 +86,43 @@ void PPRF::expand() {
             sibling = 2 * j;
           } else {
             PRF<BitString> prf((*previous)[j]);
-            (*next)[2 * j] = prf(0, nodesize);
-            (*next)[2 * j + 1] = prf(1, nodesize);
+            (*next)[2 * j] = prf(0, this->keysize);
+            (*next)[2 * j + 1] = prf(1, this->keysize);
 
             left ^= (*next)[2 * j];
             right ^= (*next)[2 * j + 1];
           }
         }
         return std::make_pair(left, right);
-      }, [&nodesize](const std::vector<std::pair<BitString, BitString>>& results) {
-        BitString left = results[0].first;
-        BitString right = results[0].second;
-        for (size_t j = 1; j < results.size(); j++) {
-          left ^= results[j].first;
-          right ^= results[j].second;
-        }
-        return std::make_pair(left, right);
-      }, previous->size());
+      }, BitString::xor_combine, previous->size());
 
-      // for inner nodes just place the new key in the sibling position
-      if (l < depth - 1) {
-        (*next)[sibling] = this->keys[(i * depth) + l] ^ (path[l] ? xors.first : xors.second);
-      // at the leafs insert both the sibling and the puncture point
-      } else {
-        BitString left = this->keys[(i * depth) + l][{0, outsize}] ^ xors.first;
-        BitString right = this->keys[(i * depth) + l][{outsize, outsize * 2}] ^ xors.second;
-        (*next)[sibling] = path[l] ? left : right;
-        (*next)[points[i]] = !path[l] ? left : right;
-      }
-
+      // for inner nodes place the new key in the sibling position
+      (*next)[sibling] = this->keys[(i * (depth + 1)) + l] ^ (path[l] ? xors.first : xors.second);
       previous = next;
     }
+
+    // expand non-punctured leafs to the specified `outsize`
+    auto leaf_xors = TASK_REDUCE<std::pair<BitString, BitString>>(
+      [this, &previous](size_t start, size_t end)
+    {
+      BitString left(this->outsize), right(this->outsize);
+      for (size_t j = start; j < end; j++) {
+        if ((*previous)[j].size() == 0) { continue; }
+        PRF<BitString> prf((*previous)[j]);
+        (*previous)[j] = prf(0, this->outsize);
+        if (j % 2 == 0) { left ^= (*previous)[j]; }
+        else            { right ^= (*previous)[j]; }
+      }
+      return std::make_pair(left, right);
+    }, BitString::xor_combine, previous->size());
+
+    // put the punctured output where it should be
+    (*previous)[points[i]] = (
+      this->keys[(i * (depth + 1)) + depth]
+      ^ (points[i] % 2 == 0 ? leaf_xors.first : leaf_xors.second)
+    );
+
+    // xor this with the current state of the pprf
     if (this->leafs.get() == nullptr) {
       this->leafs = previous;
     } else {
@@ -179,14 +190,13 @@ void PPRF::send(
 
   std::vector<std::pair<BitString, BitString>> messages;
   for (size_t i = 0; i < pprf.levels.size(); i++) {
-    if (i % pprf.depth < pprf.depth - 1) {
-      messages.push_back(pprf.levels[i]);
-    } else {
-      // leaf level is sent with both
-      std::pair<BitString, BitString> leafs = pprf.levels[i];
+    if (i % (pprf.depth + 1) == pprf.depth) {
+      // leaf level is xor'd with payload
       messages.push_back(std::make_pair(
-        leafs.first + (leafs.second ^ payload), (leafs.first ^ payload) + leafs.second
+        pprf.levels[i].first ^ payload, pprf.levels[i].second ^ payload
       ));
+    } else {
+      messages.push_back(pprf.levels[i]);
     }
   }
 
@@ -207,10 +217,13 @@ PPRF PPRF::receive(
     // want the sibling nodes for the path to `x`
     choices += BitString::fromUInt(~x, depth).reverse();
 
-    // most of the ots are `keysize`-bit but the last is twice the `outsize` for the leaf layer
-    std::vector<size_t> branches(depth - 1, keysize);
+    // except the payload which should be the punctured leaf node
+    choices += (!choices[choices.size() - 1]);
+
+    // most of the ots are `keysize`-bit but the last is the `outsize` for the leaf layer
+    std::vector<size_t> branches(depth, keysize);
     sizes.insert(sizes.end(), branches.begin(), branches.end());
-    sizes.push_back(outsize * 2);
+    sizes.push_back(outsize);
   }
 
   // do the oblivious transfer

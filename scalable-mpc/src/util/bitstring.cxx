@@ -171,6 +171,19 @@ BitString BitString::concat(const std::vector<BitString> in) {
   return out;
 }
 
+std::pair<BitString, BitString> BitString::xor_combine(
+  const std::vector<std::pair<BitString, BitString>>& in
+) {
+  if (in.size() == 0) { return std::make_pair(BitString(0), BitString(0)); }
+  BitString first = in[0].first;
+  BitString second = in[0].second;
+  for (size_t i = 1; i < in.size(); i++) {
+    first ^= in[i].first;
+    second ^= in[i].second;
+  }
+  return std::make_pair(first, second);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // BITWISE OPERATORS
 ////////////////////////////////////////////////////////////////////////////////
