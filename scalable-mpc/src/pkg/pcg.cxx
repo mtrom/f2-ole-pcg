@@ -261,6 +261,7 @@ std::pair<BitString, BitString> PCG::finalize(size_t other_id) {
   e.stop();
 
   // arrange our shares of the ε ⊗ s matrix by column
+  Timer transpose("[finalize] transpose tensor");
   std::vector<BitString> send_eXs_matrix(params.primal.k, BitString(params.dual.N()));
   MULTI_TASK([this, &send_eXs_matrix](size_t start, size_t end) {
     for (size_t c = start; c < end; c++) {
@@ -283,7 +284,12 @@ std::pair<BitString, BitString> PCG::finalize(size_t other_id) {
       }
     }
   }, params.primal.k);
+<<<<<<< HEAD
   for (PPRF& pprf : this->recv_eXs) { pprf.clear(); }
+=======
+  this->recv_eXs.clear();
+  transpose.stop();
+>>>>>>> more verbosity
 
   // recompute dual matrix needed for next step
   Timer resample("[finalize] resample dual matrix");
