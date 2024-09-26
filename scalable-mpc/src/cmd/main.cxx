@@ -51,33 +51,24 @@ int main(int argc, char *argv[]) {
     );
     std::cout << params.toString() << std::endl;
 
-    Timer setup("[memcheck] setup");
-    Beaver::PCG pcg(0, params);
-    setup.stop();
+    Timer regular("[memcheck] regular");
+    std::vector<PPRF> pprfs = PPRF::sampleMany(
+      params.dual.t, LAMBDA, params.primal.k, params.dual.blockSize()
+    );
+    regular.stop();
 
     std::cout << "           enter to continue..." << std::endl;
     std::cin.get();
 
-    Timer prepare("[memcheck] prepare");
-    pcg.prepare();
-    prepare.stop();
+    pprfs.clear();
+
+    std::cin.get();
+    Timer exact("[memcheck] exact");
+    PPRF pprf = PPRF::sample(params.dual.t, LAMBDA, params.primal.k, params.dual.N());
+    exact.stop();
 
     std::cout << "           enter to continue..." << std::endl;
     std::cin.get();
-
-    /*
-    std::cout << "[memcheck] starting..." << std::endl;
-    Timer a("[memcheck] sample primal");
-    LPN::PrimalMatrix A(params.pkey, params.primal);
-    a.stop();
-    std::cin.get();
-
-    Timer d("[memcheck] sample dual");
-    LPN::DualMatrix H(params.dkey, params.dual);
-    d.stop();
-    std::cin.get();
-    */
-
   } catch (const options::error &ex) {
     std::cerr << "[memcheck] error: " << ex.what() << std::endl;
     return 1;

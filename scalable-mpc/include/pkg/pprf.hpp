@@ -7,6 +7,7 @@
 
 #include "pkg/rot.hpp"
 #include "util/bitstring.hpp"
+#include "util/concurrency.hpp"
 
 // P(unctured) P(seudo)R(andom) F(unction)
 class PPRF {
@@ -16,13 +17,15 @@ public:
   // initialize given the root `key`
   PPRF(BitString key, size_t outsize, size_t domainsize);
 
-  // initialize the pprf which has been punctured at `points`
+  // initialize the pprf which has been punctured at `puncture`
   PPRF(
-    std::vector<BitString> keys, std::vector<uint32_t> points, size_t outsize, size_t domainsize
+    std::vector<BitString> keys, uint32_t puncture, size_t outsize, size_t domainsize
   );
 
-  // create pprf with `n` puncture points with randomly sampled keys
-  static PPRF sample(size_t n, size_t keysize, size_t outsize, size_t domainsize);
+  // create `n` pprfs with a single puncture point with randomly sampled keys
+  static std::vector<PPRF> sample(
+    size_t n, size_t keysize, size_t outsize, size_t domainsize
+  );
 
   // evaluate the pprf on `x`
   BitString operator() (uint32_t x) const;
@@ -30,22 +33,19 @@ public:
   // expand a pprf that has been shared
   void expand();
 
-  // combine two pprfs by xoring their output
-  PPRF& operator^=(const PPRF& other);
-
   size_t domain() const { return domainsize; }
 
-  void clear() { leafs.reset(); levels.clear(); keys.clear(); points.clear(); }
+  void clear() { leafs.reset(); levels.clear(); keys.clear(); }
 
   // for debugging purposes
   std::string toString() const;
 
   // share across `channel` punctured according to `points` with output `payload`
   static void send(
-    PPRF pprf, BitString payload,
+    std::vector<PPRF> pprf, BitString payload,
     std::shared_ptr<CommParty> channel, RandomOTSender rots
   );
-  static PPRF receive(
+  static std::vector<PPRF> receive(
     std::vector<uint32_t> points, size_t keysize, size_t outsize, size_t domainsize,
     std::shared_ptr<CommParty> channel, RandomOTReceiver rots
   );
@@ -63,7 +63,7 @@ protected:
 
   // point that has been punctured
   std::vector<BitString> keys;
-  std::vector<uint32_t> points;
+  uint32_t puncture;
 };
 
 // D(istributed) P(oint) F(unction) (i.e., special case of pprf where the output is binary)

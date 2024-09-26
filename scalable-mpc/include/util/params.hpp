@@ -32,7 +32,7 @@ public:
   // number of non-zero entries per row in public matrix
   size_t l;
 
-  // number of bits per block
+  // number of bits per error block
   size_t blockSize() const { return n / t; }
 
   // number of bit to represent an error position
@@ -66,6 +66,9 @@ public:
   // dual-code matrix dimension
   size_t N() const { return (size_t) ceil(n * c); }
 
+  // number of bits per error block
+  size_t blockSize() const { return (size_t) ceil(N() / t); }
+
   std::string toString() const {
     std::ostringstream out;
     out << "N = " << N() << ", t = " << t;
@@ -79,9 +82,15 @@ public:
 class PCGParams {
 public:
   PCGParams(
+    size_t size,
     BitString pkey, size_t n, size_t k, size_t tp, size_t l,
     BitString dkey, float c, size_t td
-  ) : size(n), primal(n, k, tp, l), pkey(pkey), dual(k, c, td), dkey(dkey) { }
+  ) : size(size), primal(n, k, tp, l), pkey(pkey), dual(k, c, td), dkey(dkey) { }
+
+  PCGParams(
+    BitString pkey, size_t n, size_t k, size_t tp, size_t l,
+    BitString dkey, float c, size_t td
+  ) : PCGParams(n, pkey, n, k, tp, l, dkey, c, td) { }
 
   // number of correlations to output
   size_t size;
@@ -100,6 +109,10 @@ public:
   // parameter for equality testing
   // TODO: what should this value be?
   size_t eqTestThreshold = 3;
+
+  size_t blocks() {
+    return (size_t) ceil(size / primal.blockSize());
+  }
 
   std::string toString() const {
     return (

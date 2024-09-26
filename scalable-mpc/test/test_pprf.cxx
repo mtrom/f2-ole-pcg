@@ -65,7 +65,7 @@ TEST_F(PPRFTests, ConstructPunctured) {
     keys.push_back(BitString::sample(LAMBDA));
   }
 
-  PPRF pprf(keys, std::vector<uint32_t>({x}), LAMBDA, 1 << depth);
+  PPRF pprf(keys, x, LAMBDA, 1 << depth);
 
   pprf.expand();
 
@@ -83,8 +83,8 @@ TEST_F(PPRFTests, EvalSamePuncturedKeySameOutput) {
     keys.push_back(BitString::sample(LAMBDA));
   }
 
-  PPRF a(keys, std::vector<uint32_t>({x}), LAMBDA, 1 << depth);
-  PPRF b(keys, std::vector<uint32_t>({x}), LAMBDA, 1 << depth);
+  PPRF a(keys, x, LAMBDA, 1 << depth);
+  PPRF b(keys, x, LAMBDA, 1 << depth);
 
   a.expand();
   b.expand();
@@ -94,28 +94,13 @@ TEST_F(PPRFTests, EvalSamePuncturedKeySameOutput) {
   }
 }
 
-TEST_F(PPRFTests, XOR) {
-  BitString first_key = BitString::sample(LAMBDA);
-  BitString second_key = BitString::sample(LAMBDA);
-
-  PPRF a(first_key, LAMBDA, LAMBDA);
-  PPRF c(first_key, LAMBDA, LAMBDA);
-  PPRF b(second_key, LAMBDA, LAMBDA);
-
-  c ^= b;
-
-  for (size_t i = 0; i < LAMBDA; i++) {
-    EXPECT_EQ(a(i) ^ b(i), c(i));
-  }
-}
-
 TEST_F(PPRFTests, SendAndReceive) {
   const size_t batchsize = 64;
   const size_t outsize = LAMBDA;
   const size_t domainsize = 512;
 
   std::vector<uint32_t> points = sampleDistinct(batchsize, domainsize);
-  PPRF sender = PPRF::sample(batchsize, LAMBDA, outsize, domainsize);
+  std::vector<PPRF> sender = PPRF::sample(batchsize, LAMBDA, outsize, domainsize);
   BitString payload = BitString::sample(outsize);
 
   auto results = this->launch(
@@ -123,22 +108,24 @@ TEST_F(PPRFTests, SendAndReceive) {
       PPRF::send(sender, payload, this->sch, this->srots);
       return true;
     },
-    [&]() -> PPRF {
+    [&]() -> std::vector<PPRF> {
       return PPRF::receive(
         points, LAMBDA, outsize, domainsize, this->rch, this->rrots
       );
 
     }
   );
-  PPRF receiver = results.second;
+  std::vector<PPRF> receiver = results.second;
 
-  ASSERT_EQ(receiver.domain(), sender.domain());
-  receiver.expand();
-  for (size_t x = 0; x < domainsize; x++) {
-    if (std::find(points.begin(), points.end(), x) != points.end()) {
-      EXPECT_EQ(sender(x) ^ receiver(x), payload);
-    } else {
-      EXPECT_EQ(sender(x), receiver(x));
+  for (size_t i = 0; i < sender.size(); i++) {
+    ASSERT_EQ(receiver[i].domain(), sender[i].domain());
+    receiver[i].expand();
+    for (size_t x = 0; x < domainsize; x++) {
+      if (x == points[i]) {
+        EXPECT_EQ(sender[i](x) ^ receiver[i](x), payload);
+      } else {
+        EXPECT_EQ(sender[i](x), receiver[i](x));
+      }
     }
   }
 }
@@ -151,7 +138,7 @@ TEST_F(DPFTests, SameKeySameImage) {
   EXPECT_EQ(a.image(), b.image());
 }
 
-TEST_F(PPRFTests, DPFSendAndReceive) {
+TEST_F(DPFTests, SendAndReceive) {
   const size_t batchsize = LAMBDA;
 
   std::vector<uint32_t> points = sampleVector(batchsize, LAMBDA);

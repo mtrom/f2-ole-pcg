@@ -215,6 +215,7 @@ int main(int argc, char *argv[]) {
       "host", options::value<std::string>()->default_value("127.0.0.1"),
       "the other party's public ip address"
     )
+    ("logCorrelations", options::value<unsigned>()->default_value(0), "log the number of correlations to compute")
     ("logN", options::value<unsigned>()->required(), "log of the number of triples to generate")
     ("logk", options::value<unsigned>()->required(), "log of the size of primal LPN secret vector")
     ("logtp", options::value<unsigned>()->required(), "log of the primal LPN error vector weight")
@@ -245,6 +246,7 @@ int main(int argc, char *argv[]) {
 
     std::string host = vm["host"].as<std::string>();
 
+    unsigned logC = vm["logCorrelations"].as<unsigned>();
     unsigned logN = vm["logN"].as<unsigned>();
     unsigned logk = vm["logk"].as<unsigned>();
     unsigned logtp = vm["logtp"].as<unsigned>();
@@ -252,7 +254,10 @@ int main(int argc, char *argv[]) {
     unsigned c = vm["c"].as<unsigned>();
     unsigned td = vm["td"].as<unsigned>();
 
+    if (logC == 0) { logC = logN; }
+
     PCGParams params(
+      1 << logC,
       BitString::sample(LAMBDA), 1 << logN, 1 << logk, 1 << logtp, l,
       BitString::sample(LAMBDA), c, td
     );
