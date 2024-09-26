@@ -6,6 +6,7 @@
 #include "pkg/pprf.hpp"
 #include "pkg/pcg.hpp"
 #include "util/bitstring.hpp"
+#include "util/concurrency.hpp"
 #include "util/defines.hpp"
 #include "util/random.hpp"
 #include "util/timer.hpp"
@@ -51,19 +52,66 @@ int main(int argc, char *argv[]) {
     );
     std::cout << params.toString() << std::endl;
 
-    Timer setup("[memcheck] setup");
-    Beaver::PCG pcg(0, params);
-    setup.stop();
+    Timer sample("[memcheck] setup");
+    PPRF send_eXs = PPRF::sample(params.dual.t, LAMBDA, params.primal.k, params.dual.N());
+    sample.stop();
+    LPN::PrimalMatrix A = LPN::PrimalMatrix(params.pkey, params.primal);
+    LPN::DualMatrix H = LPN::DualMatrix(params.dkey, params.dual);
+    LPN::MatrixProduct B = LPN::MatrixProduct(A, H);
 
-    std::cout << "           enter to continue..." << std::endl;
-    std::cin.get();
+    Timer without("[memcheck] without matrix");
+    TASK_REDUCE<BitString>(
+      [&params, &send_eXs, &A, &B](size_t start, size_t end)
+    {
+      BitString send_out(end - start);
+      for (size_t i = start; i < end; i++) {
+        BitString send_aXeXs(params.dual.N());
+        for (uint32_t idx : A.getNonZeroElements(i)) {
+          // combine columns of the ε ⊗ s matrix
+          for (size_t row = 0; row < params.dual.N(); row++) {
+            send_aXeXs[row] ^= send_eXs(row)[idx];
+          }
+        }
+        BitString row = B[i];
+        send_out[i - start] = row * send_aXeXs;
+      }
+      return send_out;
+    }, [](std::vector<BitString> results) {
+      BitString concat;
+      for (const BitString& res : results) { concat += res; }
+      return concat;
+    }, params.size);
+    without.stop();
 
-    Timer prepare("[memcheck] prepare");
-    pcg.prepare();
-    prepare.stop();
+    Timer with("[memcheck] with matrix");
+    std::vector<BitString> send_eXs_matrix(params.primal.k, BitString(params.dual.N()));
+    MULTI_TASK([&params, &send_eXs, &send_eXs_matrix](size_t start, size_t end) {
+      for (size_t c = start; c < end; c++) {
+        for (size_t r = 0; r < params.dual.N(); r++) {
+          send_eXs_matrix[c][r] ^= send_eXs(r)[c];
+        }
+      }
+    }, params.primal.k);
 
-    std::cout << "           enter to continue..." << std::endl;
-    std::cin.get();
+    TASK_REDUCE<BitString>(
+      [&params, &send_eXs_matrix, &A, &B](size_t start, size_t end)
+    {
+      BitString send_out(end - start);
+      for (size_t i = start; i < end; i++) {
+        BitString send_aXeXs(params.dual.N());
+        for (uint32_t idx : A.getNonZeroElements(i)) {
+          send_aXeXs ^= send_eXs_matrix[idx];
+        }
+        BitString row = B[i];
+        send_out[i - start] = row * send_aXeXs;
+      }
+      return send_out;
+    }, [](std::vector<BitString> results) {
+      BitString concat;
+      for (const BitString& res : results) { concat += res; }
+      return concat;
+    }, params.size);
+    with.stop();
 
     /*
     std::cout << "[memcheck] starting..." << std::endl;
