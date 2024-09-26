@@ -24,6 +24,11 @@ public:
   // create pprf with `n` puncture points with randomly sampled keys
   static PPRF sample(size_t n, size_t keysize, size_t outsize, size_t domainsize);
 
+  // create `n` pprfs with a single puncture point with randomly sampled keys
+  static std::vector<PPRF> sampleMany(
+    size_t n, size_t keysize, size_t outsize, size_t domainsize
+  );
+
   // evaluate the pprf on `x`
   BitString operator() (uint32_t x) const;
 

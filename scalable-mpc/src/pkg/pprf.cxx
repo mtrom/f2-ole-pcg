@@ -145,6 +145,14 @@ PPRF PPRF::sample(size_t n, size_t keysize, size_t outsize, size_t domainsize) {
   return pprf;
 }
 
+std::vector<PPRF> PPRF::sampleMany(size_t n, size_t keysize, size_t outsize, size_t domainsize) {
+  std::vector<PPRF> pprfs;
+  for (size_t i = 0; i < n; i++) {
+    pprfs.push_back(PPRF(BitString::sample(keysize), outsize, domainsize));
+  }
+  return pprfs;
+}
+
 BitString PPRF::operator() (uint32_t x) const {
   if (x >= domainsize) {
     throw std::out_of_range("[PPRF::operator()] x not in domain (x = " + std::to_string(x) + ")");
