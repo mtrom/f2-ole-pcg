@@ -108,6 +108,15 @@ void PCG::online(
 
   //////// (⟨aᵢ,s₁⟩ · e₀) and (⟨aᵢ,s₀⟩ · e₁) ⊕ (e₀ ○ e₁) TERMS ////////
 
+  float upload = channel->bytesIn;
+  float download = channel->bytesOut;
+  if (other_id == 1) {
+    std::cout << "[offline] online starts" << std::endl;
+    std::cout << "          upload   = " << upload << " B" << std::endl;
+    std::cout << "          download = " << download << " B" << std::endl;
+    std::cout << "          total    = " << (upload + download) << " B" << std::endl;
+  }
+
   // equality test for (e₀ ○ e₁) terms (in both directions)
   CHOOSE_BY_ROLE({
     EqTestSender eqtester = EqTestSender(
@@ -121,6 +130,15 @@ void PCG::online(
     std::tie(this->send_eoe, this->recv_eoe) = eqtester.run(this->e0, this->e1);
   });
 
+  if (other_id == 1) {
+    std::cout << "[offline] equality testing" << std::endl;
+    std::cout << "          upload   = " << channel->bytesIn - upload << " B" << std::endl;
+    std::cout << "          download = " << channel->bytesOut - download << " B" << std::endl;
+    std::cout << "          total    = " << (channel->bytesIn + channel->bytesOut) - (upload + download) << " B" << std::endl;
+    upload = channel->bytesIn;
+    download = channel->bytesOut;
+  }
+
   // exchange encrypted secret vectors Enc(s₀) and Enc(s₁)
   std::vector<AHE::Ciphertext> other_enc_s0, other_enc_s1;
   ORDER_BY_ROLE({
@@ -132,6 +150,15 @@ void PCG::online(
     other_enc_s0 = this->ahe.receive(this->params.primal.k, channel, true);
     other_enc_s1 = this->ahe.receive(this->params.primal.k, channel, true);
   });
+
+  if (other_id == 1) {
+    std::cout << "[offline] send ciphertexts" << std::endl;
+    std::cout << "          upload   = " << channel->bytesIn - upload << " B" << std::endl;
+    std::cout << "          download = " << channel->bytesOut - download << " B" << std::endl;
+    std::cout << "          total    = " << (channel->bytesIn + channel->bytesOut) - (upload + download) << " B" << std::endl;
+    upload = channel->bytesIn;
+    download = channel->bytesOut;
+  }
 
   // homomorphically compute Enc(⟨aᵢ,s⟩) for both directions
   std::vector<AHE::Ciphertext> enc_recv_eXas = homomorphicInnerProduct(other_enc_s1, true);
@@ -148,6 +175,15 @@ void PCG::online(
     send_resp = this->ahe.receive(this->params.primal.t, channel);
     recv_resp = this->ahe.receive(this->params.primal.t, channel);
   });
+
+  if (other_id == 1) {
+    std::cout << "[offline] send ciphertexts back" << std::endl;
+    std::cout << "          upload   = " << channel->bytesIn - upload << " B" << std::endl;
+    std::cout << "          download = " << channel->bytesOut - download << " B" << std::endl;
+    std::cout << "          total    = " << (channel->bytesIn + channel->bytesOut) - (upload + download) << " B" << std::endl;
+    upload = channel->bytesIn;
+    download = channel->bytesOut;
+  }
 
   BitString send_decrypted = this->ahe.decrypt(send_resp);
   BitString recv_decrypted = this->ahe.decrypt(recv_resp);
@@ -167,6 +203,15 @@ void PCG::online(
     DPF::send(this->send_eXas, recv_decrypted, channel, srots);
   });
 
+  if (other_id == 1) {
+    std::cout << "[offline] dpf exchange" << std::endl;
+    std::cout << "          upload   = " << channel->bytesIn - upload << " B" << std::endl;
+    std::cout << "          download = " << channel->bytesOut - download << " B" << std::endl;
+    std::cout << "          total    = " << (channel->bytesIn + channel->bytesOut) - (upload + download) << " B" << std::endl;
+    upload = channel->bytesIn;
+    download = channel->bytesOut;
+  }
+
   // free up some memory
   this->send_eoe.clear();
   recv_decrypted.clear();
@@ -181,6 +226,15 @@ void PCG::online(
       this->epsilon, LAMBDA, params.primal.k, params.dual.N(), channel, rrots
     );
   });
+
+  if (other_id == 1) {
+    std::cout << "[offline] pprf exchange" << std::endl;
+    std::cout << "          upload   = " << channel->bytesIn - upload << " B" << std::endl;
+    std::cout << "          download = " << channel->bytesOut - download << " B" << std::endl;
+    std::cout << "          total    = " << (channel->bytesIn + channel->bytesOut) - (upload + download) << " B" << std::endl;
+    upload = channel->bytesIn;
+    download = channel->bytesOut;
+  }
 }
 
 std::pair<BitString, BitString> PCG::finalize(size_t other_id) {
