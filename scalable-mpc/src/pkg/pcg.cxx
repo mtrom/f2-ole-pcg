@@ -261,14 +261,44 @@ void PCG::online(
 
 std::pair<BitString, BitString> PCG::finalize(size_t other_id) {
 
+  // arrange our shares of the ε ⊗ s matrix by column
+  Timer send_transpose("[finalize] transpose send tensor");
+  std::vector<BitString> send_eXs_matrix(params.primal.k, BitString(params.dual.N()));
+  MULTI_TASK([this, &send_eXs_matrix](size_t start, size_t end) {
+    for (size_t c = start; c < end; c++) {
+      for (size_t p = 0; p < params.dual.t; p++) {
+        for (size_t r = 0; r < params.dual.blockSize(); r++) {
+          send_eXs_matrix[c][r] ^= this->send_eXs[p](r)[c];
+        }
+      }
+    }
+  }, params.primal.k);
+  for (PPRF& pprf : this->send_eXs) { pprf.clear(); }
+  send_transpose.stop();
+
   // expand out ⟨ε ⊗ s⟩ pprfs
-  Timer a("[finalize] expand pprf");
+  Timer a("[finalize] expand recv tensor");
   MULTI_TASK([this](size_t start, size_t end) {
     for (size_t i = start; i < end; i++) {
       this->recv_eXs[i].expand();
     }
   }, this->recv_eXs.size());
   a.stop();
+
+  // arrange our shares of the ε ⊗ s matrix by column
+  Timer recv_transpose("[finalize] transpose recv tensor");
+  std::vector<BitString> recv_eXs_matrix(params.primal.k, BitString(params.dual.N()));
+  MULTI_TASK([this, &recv_eXs_matrix](size_t start, size_t end) {
+    for (size_t c = start; c < end; c++) {
+      for (size_t p = 0; p < params.dual.t; p++) {
+        for (size_t r = 0; r < params.dual.blockSize(); r++) {
+          recv_eXs_matrix[c][r] ^= this->recv_eXs[p](r)[c];
+        }
+      }
+    }
+  }, params.primal.k);
+  for (PPRF& pprf : this->recv_eXs) { pprf.clear(); }
+  recv_transpose.stop();
 
   // expand only the other pprfs that are needed
   Timer b("[finalize] expand dpfs");
@@ -301,32 +331,6 @@ std::pair<BitString, BitString> PCG::finalize(size_t other_id) {
   for (DPF& dpf : this->send_eXas)     { dpf.clear(); }
   for (DPF& dpf : this->recv_eXas)     { dpf.clear(); }
   e.stop();
-
-  // arrange our shares of the ε ⊗ s matrix by column
-  Timer transpose("[finalize] transpose tensor");
-  std::vector<BitString> send_eXs_matrix(params.primal.k, BitString(params.dual.N()));
-  MULTI_TASK([this, &send_eXs_matrix](size_t start, size_t end) {
-    for (size_t c = start; c < end; c++) {
-      for (size_t p = 0; p < params.dual.t; p++) {
-        for (size_t r = 0; r < params.dual.blockSize(); r++) {
-          send_eXs_matrix[c][r] ^= this->send_eXs[p](r)[c];
-        }
-      }
-    }
-  }, params.primal.k);
-  for (PPRF& pprf : this->send_eXs) { pprf.clear(); }
-
-  std::vector<BitString> recv_eXs_matrix(params.primal.k, BitString(params.dual.N()));
-  MULTI_TASK([this, &recv_eXs_matrix](size_t start, size_t end) {
-    for (size_t c = start; c < end; c++) {
-      for (size_t p = 0; p < params.dual.t; p++) {
-        for (size_t r = 0; r < params.dual.blockSize(); r++) {
-          recv_eXs_matrix[c][r] ^= this->recv_eXs[p](r)[c];
-        }
-      }
-    }
-  }, params.primal.k);
-  for (PPRF& pprf : this->recv_eXs) { pprf.clear(); }
 
   // recompute dual matrix needed for next step
   Timer resample("[finalize] resample dual matrix");
