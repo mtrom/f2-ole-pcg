@@ -25,23 +25,24 @@ namespace options = boost::program_options;
 void runSender(const PCGParams& params, const std::string& host) {
   std::cout << params.toString() << std::endl;
 
+  Timer timer;
   SocketPartyData my_socket(address::from_string("0.0.0.0"), BASE_PORT);
   SocketPartyData their_socket(address::from_string(host), BASE_PORT);
 
-  Timer setup("[offline] setup");
+  timer.start("[offline] setup");
   Beaver::PCG pcg(SEND_ID, params);
-  setup.stop();
+  timer.stop();
 
-  Timer prepare("[offline] prepare");
+  timer.start("[offline] prepare");
   pcg.prepare();
-  prepare.stop();
+  timer.stop();
 
   boost::asio::io_service ios;
   Channel channel = std::make_shared<CommPartyTCPSynced>(ios, my_socket, their_socket);
   channel->join(COMM_SLEEP, COMM_TIMEOUT);
 
-  Timer online("[offline] online");
-  Timer ots("[online] ot ext");
+  timer.start("[offline] online");
+  Timer subtimer("[online] ot ext");
   size_t srots, rrots;
   std::tie(srots, rrots) = pcg.numOTs(RECV_ID);
 
@@ -50,46 +51,47 @@ void runSender(const PCGParams& params, const std::string& host) {
 
   RandomOTReceiver receiver;
   receiver.run(rrots, channel, host, BASE_PORT + 2);
-  ots.stop();
+  subtimer.stop();
 
   pcg.online(RECV_ID, channel, sender, receiver);
-  online.stop();
+  timer.stop();
 
   float upload = (float) channel->bytesIn / 1000000;
   float download = (float) channel->bytesOut / 1000000;
-  std::cout << "[offline] upload   = " << upload << "MB" << std::endl;
+  std::cout << "          upload   = " << upload << "MB" << std::endl;
   std::cout << "          download = " << download << "MB" << std::endl;
   std::cout << "          total    = " << (upload + download) << "MB" << std::endl;
 
   channel.reset();
 
-  Timer finalize("[offline] finalize");
+  timer.start("[offline] finalize");
   std::pair<BitString, BitString> output = pcg.finalize(RECV_ID);
-  finalize.stop();
+  timer.stop();
 
   std::cout << GREEN << "[offline] done." << RESET << std::endl;
 }
 
 void runReceiver(const PCGParams& params, const std::string& host) {
   std::cout << params.toString();
+  Timer timer;
 
   SocketPartyData my_socket(address::from_string("0.0.0.0"), BASE_PORT);
   SocketPartyData their_socket(address::from_string(host), BASE_PORT);
 
-  Timer setup("[offline] setup");
+  timer.start("[offline] setup");
   Beaver::PCG pcg(RECV_ID, params);
-  setup.stop();
+  timer.stop();
 
-  Timer prepare("[offline] prepare");
+  timer.start("[offline] prepare");
   pcg.prepare();
-  prepare.stop();
+  timer.stop();
 
   boost::asio::io_service ios;
   Channel channel = std::make_shared<CommPartyTCPSynced>(ios, my_socket, their_socket);
   channel->join(COMM_SLEEP, COMM_TIMEOUT);
 
-  Timer online("[offline] online");
-  Timer ots("[online] ot ext");
+  timer.start("[offline] online");
+  Timer subtimer("[online] ot ext");
   size_t srots, rrots;
   std::tie(srots, rrots) = pcg.numOTs(SEND_ID);
 
@@ -98,43 +100,41 @@ void runReceiver(const PCGParams& params, const std::string& host) {
 
   RandomOTSender sender;
   sender.run(srots, channel, BASE_PORT + 2);
-  ots.stop();
+  subtimer.stop();
 
   pcg.online(SEND_ID, channel, sender, receiver);
-  online.stop();
+  timer.stop();
 
   float upload = (float) channel->bytesIn / 1000000;
   float download = (float) channel->bytesOut / 1000000;
-  std::cout << "[offline] upload   = " << upload << "MB" << std::endl;
+  std::cout << "          upload   = " << upload << "MB" << std::endl;
   std::cout << "          download = " << download << "MB" << std::endl;
   std::cout << "          total    = " << (upload + download) << "MB" << std::endl;
 
   channel.reset();
 
-  Timer finalize("[offline] finalize");
+  timer.start("[offline] finalize");
   std::pair<BitString, BitString> output = pcg.finalize(SEND_ID);
-  finalize.stop();
+  timer.stop();
 
   std::cout << GREEN << "[offline] done." << RESET << std::endl;
 }
 
 void runBoth(const PCGParams& params) {
+  std::cout << params.toString();
 
   SocketPartyData asocket(address::from_string("127.0.0.1"), BASE_PORT);
   SocketPartyData bsocket(address::from_string("127.0.0.1"), BASE_PORT + 1);
 
-  std::cout << "[offline] N = " << params.size << ", k = " << params.primal.k;
-  std::cout << ", t_p = " << params.primal.t << ", l = " << params.primal.l;
-  std::cout << ", c = " << params.dual.c << ", t_d = " << params.dual.t << std::endl;
-
   auto alice = std::async(std::launch::async, [asocket, bsocket, params]() {
+    Timer timer;
     boost::asio::io_service ios;
     Channel channel = std::make_shared<CommPartyTCPSynced>(ios, asocket, bsocket);
     channel->join(COMM_SLEEP, COMM_TIMEOUT);
 
     Beaver::PCG pcg(SEND_ID, params);
 
-    Timer ots("[offline] ot ext");
+    timer.start("[offline] ot ext");
     size_t srots, rrots;
     std::tie(srots, rrots) = pcg.numOTs(RECV_ID);
 
@@ -143,25 +143,25 @@ void runBoth(const PCGParams& params) {
 
     RandomOTReceiver receiver;
     receiver.run(rrots, channel, "localhost", BASE_PORT + 2);
-    ots.stop();
+    timer.stop();
 
-    Timer prepare("[offline] prepare");
+    timer.start("[offline] prepare");
     pcg.prepare();
-    prepare.stop();
+    timer.stop();
 
-    Timer online("[offline] online");
+    timer.start("[offline] online");
     pcg.online(RECV_ID, channel, sender, receiver);
-    online.stop();
+    timer.stop();
 
     float upload = (float) channel->bytesIn / 1000000;
     float download = (float) channel->bytesOut / 1000000;
-    std::cout << "[offline] upload   = " << upload << "MB" << std::endl;
+    std::cout << "          upload   = " << upload << "MB" << std::endl;
     std::cout << "          download = " << download << "MB" << std::endl;
     std::cout << "          total    = " << (upload + download) << "MB" << std::endl;
 
-    Timer finalize("[offline] finalize");
+    timer.start("[offline] finalize");
     std::pair<BitString, BitString> output = pcg.finalize(RECV_ID);
-    finalize.stop();
+    timer.stop();
 
     std::pair<BitString, BitString> inputs = pcg.inputs();
     return std::make_tuple(inputs.first, inputs.second, output.first, output.second);

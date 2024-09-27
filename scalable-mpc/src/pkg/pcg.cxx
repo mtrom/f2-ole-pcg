@@ -62,83 +62,81 @@ std::pair<BitString, BitString> PCG::inputs() const {
 ////////////////////////////////////////////////////////////////////////////////
 
 void PCG::prepare() {
+  Timer timer;
+
   // initialize the pprfs that we are sending
-  Timer a("[prepare] sample eXs pprf");
+  timer.start("[prepare] sample eXs pprf");
   this->send_eXs = PPRF::sample(
     params.dual.t, LAMBDA, params.primal.k, params.dual.blockSize()
   );
-  a.stop();
+  timer.stop();
 
-  Timer b("[prepare] sample dpfs");
+  timer.start("[prepare] sample dpfs");
   this->send_eXas_eoe = DPF::sample(params.primal.t, LAMBDA, params.primal.blockSize());
   this->send_eXas = DPF::sample(params.primal.t, LAMBDA, params.primal.blockSize());
-  b.stop();
+  timer.stop();
 
   // sample public matrices
-  Timer c("[prepare] sample primal matrix");
+  timer.start("[prepare] sample primal matrix");
   this->A = LPN::PrimalMatrix(params.pkey, params.primal);
-  c.stop();
-  Timer d("[prepare] sample dual matrix");
+  timer.stop();
+  timer.start("[prepare] sample dual matrix");
   this->H = LPN::DualMatrix(params.dkey, params.dual);
-  d.stop();
+  timer.stop();
 
   // sample primal error vectors
-  Timer e("[prepare] sample primal error");
+  timer.start("[prepare] sample primal error");
   this->e0 = sampleVector(params.primal.t, params.primal.blockSize());
   this->e1 = sampleVector(params.primal.t, params.primal.blockSize());
-  e.stop();
+  timer.stop();
 
   // sample dual error vector
-  Timer f("[prepare] sample dual error");
+  timer.start("[prepare] sample dual error");
   this->epsilon = sampleVector(params.dual.t, params.dual.blockSize());
-  f.stop();
+  timer.stop();
 
   // sample one primal secret vector
-  Timer g("[prepare] sample secret vector");
+  timer.start("[prepare] sample secret vector");
   this->s0 = BitString::sample(params.primal.k);
-  g.stop();
+  timer.stop();
 
   // compute the other based on the dual matrix H and error ε
-  Timer h("[prepare] compute other secret vector");
+  timer.start("[prepare] compute other secret vector");
   this->s1 = BitString(params.primal.k);
   for (size_t i = 0; i < params.primal.k; i++) {
     for (uint32_t error : this->epsilon) {
       if (this->H[{i, error}]) { this->s1[i] ^= 1; }
     }
   }
-  h.stop();
+  timer.stop();
 
   // free up this space as it is needed later
   this->H = LPN::DualMatrix();
 
   // encrypt secret vectors
-  Timer i("[prepare] encrypt secret vectors");
+  timer.start("[prepare] encrypt secret vectors");
   this->enc_s0 = this->ahe.encrypt(this->s0);
   this->enc_s1 = this->ahe.encrypt(this->s1);
-  i.stop();
+  timer.stop();
 
   // masks for (⟨aᵢ,s₁⟩ · e₀) and (⟨aᵢ,s₀⟩ · e₁) ⊕ (e₀ ○ e₁) terms
-  Timer j("[prepare] sample masks");
+  timer.start("[prepare] sample masks");
   this->send_masks = BitString::sample(this->params.primal.t);
   this->recv_masks = BitString::sample(this->params.primal.t);
-  j.stop();
+  timer.stop();
 }
 
 void PCG::online(
   uint32_t other_id, Channel channel, RandomOTSender srots, RandomOTReceiver rrots
 ) {
-
-  //////// (⟨aᵢ,s₁⟩ · e₀) and (⟨aᵢ,s₀⟩ · e₁) ⊕ (e₀ ○ e₁) TERMS ////////
+  Timer timer;
 
   float upload = channel->bytesIn;
   float download = channel->bytesOut;
-  std::cout << "[offline] online starts" << std::endl;
-  std::cout << "          upload   = " << upload << " B" << std::endl;
-  std::cout << "          download = " << download << " B" << std::endl;
-  std::cout << "          total    = " << (upload + download) << " B" << std::endl;
 
+  //////// (⟨aᵢ,s₁⟩ · e₀) and (⟨aᵢ,s₀⟩ · e₁) ⊕ (e₀ ○ e₁) TERMS ////////
   // equality test for (e₀ ○ e₁) terms (in both directions)
-  Timer a("[online] equality testing");
+  timer.start("[online] equality testing");
   CHOOSE_BY_ROLE({
     EqTestSender eqtester = EqTestSender(
       params.primal.errorBits(), params.eqTestThreshold, 2 * params.primal.t, channel, srots
@@ -150,17 +148,16 @@ void PCG::online(
     );
     std::tie(this->send_eoe, this->recv_eoe) = eqtester.run(this->e0, this->e1);
   });
-  a.stop();
 
-  std::cout << "[offline] equality testing" << std::endl;
-  std::cout << "          upload   = " << channel->bytesIn - upload << " B" << std::endl;
-  std::cout << "          download = " << channel->bytesOut - download << " B" << std::endl;
-  std::cout << "          total    = " << (channel->bytesIn + channel->bytesOut) - (upload + download) << " B" << std::endl;
+  timer.stop();
+  std::cout << "         upload   = " << channel->bytesIn - upload << " B" << std::endl;
+  std::cout << "         download = " << channel->bytesOut - download << " B" << std::endl;
+  std::cout << "         total    = " << (channel->bytesIn + channel->bytesOut) - (upload + download) << " B" << std::endl;
   upload = channel->bytesIn;
   download = channel->bytesOut;
 
   // exchange encrypted secret vectors Enc(s₀) and Enc(s₁)
-  Timer b("[online] send ciphertexts");
+  timer.start("[online] send ciphertexts");
   std::vector<AHE::Ciphertext> other_enc_s0, other_enc_s1;
   ORDER_BY_ROLE({
     this->ahe.send(this->enc_s0, channel, true);
@@ -171,25 +168,24 @@ void PCG::online(
     other_enc_s0 = this->ahe.receive(this->params.primal.k, channel, true);
     other_enc_s1 = this->ahe.receive(this->params.primal.k, channel, true);
   });
-  b.stop();
 
-  std::cout << "[offline] send ciphertexts" << std::endl;
-  std::cout << "          upload   = " << channel->bytesIn - upload << " B" << std::endl;
-  std::cout << "          download = " << channel->bytesOut - download << " B" << std::endl;
-  std::cout << "          total    = " << (channel->bytesIn + channel->bytesOut) - (upload + download) << " B" << std::endl;
+  timer.stop();
+  std::cout << "         upload   = " << channel->bytesIn - upload << " B" << std::endl;
+  std::cout << "         download = " << channel->bytesOut - download << " B" << std::endl;
+  std::cout << "         total    = " << (channel->bytesIn + channel->bytesOut) - (upload + download) << " B" << std::endl;
   upload = channel->bytesIn;
   download = channel->bytesOut;
 
   // homomorphically compute Enc(⟨aᵢ,s⟩) for both directions
-  Timer c("[online] inner product");
+  timer.start("[online] inner product");
   std::vector<AHE::Ciphertext> enc_recv_eXas = homomorphicInnerProduct(other_enc_s1, true);
   std::vector<AHE::Ciphertext> enc_send_eXas = homomorphicInnerProduct(other_enc_s0, false);
   other_enc_s0.clear();
   other_enc_s1.clear();
-  c.stop();
+  timer.stop();
 
   // swap Enc(⟨aᵢ,s₀⟩) and Enc(⟨aᵢ,s₁⟩)
-  Timer d("[online] send ciphertexts back");
+  timer.start("[online] send ciphertexts back");
   std::vector<AHE::Ciphertext> send_resp, recv_resp;
   ORDER_BY_ROLE({
     this->ahe.send(enc_send_eXas, channel);
@@ -198,12 +194,11 @@ void PCG::online(
     send_resp = this->ahe.receive(this->params.primal.t, channel);
     recv_resp = this->ahe.receive(this->params.primal.t, channel);
   });
-  d.stop();
 
-  std::cout << "[offline] send ciphertexts back" << std::endl;
-  std::cout << "          upload   = " << channel->bytesIn - upload << " B" << std::endl;
-  std::cout << "          download = " << channel->bytesOut - download << " B" << std::endl;
-  std::cout << "          total    = " << (channel->bytesIn + channel->bytesOut) - (upload + download) << " B" << std::endl;
+  timer.stop();
+  std::cout << "         upload   = " << channel->bytesIn - upload << " B" << std::endl;
+  std::cout << "         download = " << channel->bytesOut - download << " B" << std::endl;
+  std::cout << "         total    = " << (channel->bytesIn + channel->bytesOut) - (upload + download) << " B" << std::endl;
   upload = channel->bytesIn;
   download = channel->bytesOut;
 
@@ -213,7 +208,7 @@ void PCG::online(
   recv_resp.clear();
 
   // exchange dpfs for both terms
-  Timer e("[online] share first dpf");
+  timer.start("[online] share (⟨aᵢ,s⟩ · e) pprfs");
   ORDER_BY_ROLE({
     DPF::send(this->send_eXas_eoe, send_decrypted ^ send_eoe, channel, srots);
     this->recv_eXas = DPF::receive(
@@ -225,12 +220,11 @@ void PCG::online(
     );
     DPF::send(this->send_eXas, recv_decrypted, channel, srots);
   });
-  e.stop();
 
-  std::cout << "[offline] dpf exchange" << std::endl;
-  std::cout << "          upload   = " << channel->bytesIn - upload << " B" << std::endl;
-  std::cout << "          download = " << channel->bytesOut - download << " B" << std::endl;
-  std::cout << "          total    = " << (channel->bytesIn + channel->bytesOut) - (upload + download) << " B" << std::endl;
+  timer.stop();
+  std::cout << "         upload   = " << channel->bytesIn - upload << " B" << std::endl;
+  std::cout << "         download = " << channel->bytesOut - download << " B" << std::endl;
+  std::cout << "         total    = " << (channel->bytesIn + channel->bytesOut) - (upload + download) << " B" << std::endl;
   upload = channel->bytesIn;
   download = channel->bytesOut;
 
@@ -241,7 +235,7 @@ void PCG::online(
 
   //////// ⟨bᵢ⊗ aᵢ,ε ⊗ s⟩ TERM //////////////////////
 
-  Timer f("[online] send second dpf");
+  timer.start("[online] send ⟨ε ⊗ s⟩ pprf");
   ORDER_BY_ROLE({
     PPRF::send(this->send_eXs, this->s0, channel, srots);
   }, {
@@ -249,20 +243,20 @@ void PCG::online(
       this->epsilon, LAMBDA, params.primal.k, params.dual.blockSize(), channel, rrots
     );
   });
-  f.stop();
+  timer.stop();
 
-  std::cout << "[offline] pprf exchange" << std::endl;
-  std::cout << "          upload   = " << channel->bytesIn - upload << " B" << std::endl;
-  std::cout << "          download = " << channel->bytesOut - download << " B" << std::endl;
-  std::cout << "          total    = " << (channel->bytesIn + channel->bytesOut) - (upload + download) << " B" << std::endl;
+  std::cout << "         upload   = " << channel->bytesIn - upload << " B" << std::endl;
+  std::cout << "         download = " << channel->bytesOut - download << " B" << std::endl;
+  std::cout << "         total    = " << (channel->bytesIn + channel->bytesOut) - (upload + download) << " B" << std::endl;
   upload = channel->bytesIn;
   download = channel->bytesOut;
 }
 
 std::pair<BitString, BitString> PCG::finalize(size_t other_id) {
+  Timer timer;
 
   // arrange our shares of the ε ⊗ s matrix by column
-  Timer send_transpose("[finalize] transpose send tensor");
+  timer.start("[finalize] transpose send tensor");
   std::vector<BitString> send_eXs_matrix(params.primal.k, BitString(params.dual.N()));
   MULTI_TASK([this, &send_eXs_matrix](size_t start, size_t end) {
     for (size_t c = start; c < end; c++) {
@@ -274,19 +268,19 @@ std::pair<BitString, BitString> PCG::finalize(size_t other_id) {
     }
   }, params.primal.k);
   for (PPRF& pprf : this->send_eXs) { pprf.clear(); }
-  send_transpose.stop();
+  timer.stop();
 
   // expand out ⟨ε ⊗ s⟩ pprfs
-  Timer a("[finalize] expand recv tensor");
+  timer.start("[finalize] expand recv tensor");
   MULTI_TASK([this](size_t start, size_t end) {
     for (size_t i = start; i < end; i++) {
       this->recv_eXs[i].expand();
     }
   }, this->recv_eXs.size());
-  a.stop();
+  timer.stop();
 
   // arrange our shares of the ε ⊗ s matrix by column
-  Timer recv_transpose("[finalize] transpose recv tensor");
+  timer.start("[finalize] transpose recv tensor");
   std::vector<BitString> recv_eXs_matrix(params.primal.k, BitString(params.dual.N()));
   MULTI_TASK([this, &recv_eXs_matrix](size_t start, size_t end) {
     for (size_t c = start; c < end; c++) {
@@ -298,18 +292,18 @@ std::pair<BitString, BitString> PCG::finalize(size_t other_id) {
     }
   }, params.primal.k);
   for (PPRF& pprf : this->recv_eXs) { pprf.clear(); }
-  recv_transpose.stop();
+  timer.stop();
 
   // expand only the other pprfs that are needed
-  Timer b("[finalize] expand dpfs");
+  timer.start("[finalize] expand dpfs");
   for (size_t i = 0; i < params.blocks(); i++) {
     this->recv_eXas_eoe[i].expand();
     this->recv_eXas[i].expand();
   }
-  b.stop();
+  timer.stop();
 
   // in each direction, concatenate the image for each error block to get final output
-  Timer d("[finalize] concat images");
+  timer.start("[finalize] concat images");
   BitString send_out, recv_out;
   for (size_t i = 0; i < params.blocks(); i++) {
     BitString send_image = this->send_eXas_eoe[i].image() ^ this->recv_eXas[i].image();
@@ -322,24 +316,24 @@ std::pair<BitString, BitString> PCG::finalize(size_t other_id) {
     send_out += send_image;
     recv_out += recv_image;
   }
-  d.stop();
+  timer.stop();
 
   // free up used memory
-  Timer e("[finalize] clear memory");
+  timer.start("[finalize] clear memory");
   for (DPF& dpf : this->send_eXas_eoe) { dpf.clear(); }
   for (DPF& dpf : this->recv_eXas_eoe) { dpf.clear(); }
   for (DPF& dpf : this->send_eXas)     { dpf.clear(); }
   for (DPF& dpf : this->recv_eXas)     { dpf.clear(); }
-  e.stop();
+  timer.stop();
 
   // recompute dual matrix needed for next step
-  Timer resample("[finalize] resample dual matrix");
+  timer.start("[finalize] resample dual matrix");
   this->H = LPN::DualMatrix(params.dkey, params.dual);
   this->B = LPN::MatrixProduct(A, H);
-  resample.stop();
+  timer.stop();
 
   // compute shares of the ⟨bᵢ⊗ aᵢ,ε ⊗ s⟩ vector
-  Timer f("[finalize] compute last term");
+  timer.start("[finalize] compute last term");
   auto baex_shares = TASK_REDUCE<std::pair<BitString, BitString>>(
     [this, &send_eXs_matrix, &recv_eXs_matrix](size_t start, size_t end)
   {
@@ -363,7 +357,7 @@ std::pair<BitString, BitString> PCG::finalize(size_t other_id) {
     }
     return std::make_pair(first, second);
   }, params.size);
-  f.stop();
+  timer.stop();
 
   send_out ^= baex_shares.first;
   recv_out ^= baex_shares.second;

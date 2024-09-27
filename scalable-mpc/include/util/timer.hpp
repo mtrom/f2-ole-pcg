@@ -16,48 +16,26 @@
  */
 class Timer {
 public:
-  Timer(std::string msg, std::string color = WHITE) : message(msg), color(color) {
-    start = std::chrono::high_resolution_clock::now();
+  Timer() { }
+  Timer(std::string msg, std::string color = WHITE) {
+    this->start(msg, color);
+  }
+
+  void start(std::string msg, std::string color = WHITE) {
+    this->message = msg;
+    this->color = color;
+    this->start_ = std::chrono::high_resolution_clock::now();
   }
 
   void stop() {
     auto stop = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<float> elapsed = stop - start;
-    if (using_laps) {
-        laps.push_back(elapsed);
-    } else {
-        std::cout << std::fixed << std::setprecision(3);
-        std::cout << color << message << " (s)\t: ";
-        std::cout << elapsed.count() << RESET << std::endl;
-    }
-  }
-
-  void lap() {
-    start = std::chrono::high_resolution_clock::now();
-    using_laps = true;
-  }
-
-  void print() {
-    float average = 0;
-    float min = std::numeric_limits<float>::max();
-    float max = 0;
-    for (const auto& lap : laps) {
-      average += lap.count();
-      if (lap.count() < min) { min = lap.count(); }
-      if (lap.count() > max) { max = lap.count(); }
-    }
-    average /= laps.size();
-
+    std::chrono::duration<float> elapsed = stop - start_;
     std::cout << std::fixed << std::setprecision(3);
     std::cout << color << message << " (s)\t: ";
-    std::cout << average << " (AVG), ";
-    std::cout << min << " (MIN), ";
-    std::cout << max << " (MAX)" << RESET << std::endl;
+    std::cout << elapsed.count() << RESET << std::endl;
   }
 private:
   std::string message;
   std::string color;
-  std::chrono::time_point<std::chrono::high_resolution_clock> start;
-  std::vector<std::chrono::duration<float>> laps;
-  bool using_laps = false;
+  std::chrono::time_point<std::chrono::high_resolution_clock> start_;
 };

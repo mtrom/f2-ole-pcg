@@ -50,25 +50,6 @@ int main(int argc, char *argv[]) {
       BitString::sample(LAMBDA), c, td
     );
     std::cout << params.toString() << std::endl;
-
-    Timer regular("[memcheck] regular");
-    std::vector<PPRF> pprfs = PPRF::sampleMany(
-      params.dual.t, LAMBDA, params.primal.k, params.dual.blockSize()
-    );
-    regular.stop();
-
-    std::cout << "           enter to continue..." << std::endl;
-    std::cin.get();
-
-    pprfs.clear();
-
-    std::cin.get();
-    Timer exact("[memcheck] exact");
-    PPRF pprf = PPRF::sample(params.dual.t, LAMBDA, params.primal.k, params.dual.N());
-    exact.stop();
-
-    std::cout << "           enter to continue..." << std::endl;
-    std::cin.get();
   } catch (const options::error &ex) {
     std::cerr << "[memcheck] error: " << ex.what() << std::endl;
     return 1;
