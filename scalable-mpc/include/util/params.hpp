@@ -67,7 +67,7 @@ public:
   size_t N() const { return (size_t) ceil(n * c); }
 
   // number of bits per error block
-  size_t blockSize() const { return (size_t) ceil(N() / t); }
+  size_t blockSize() const { return (size_t) ceil((float) N() / t); }
 
   std::string toString() const {
     std::ostringstream out;

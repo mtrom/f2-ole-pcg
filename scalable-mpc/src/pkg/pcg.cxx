@@ -83,6 +83,7 @@ void PCG::prepare() {
   timer.start("[prepare] sample dual matrix");
   this->H = LPN::DualMatrix(params.dkey, params.dual);
   timer.stop();
+  this->B = LPN::MatrixProduct(A, H);
 
   // sample primal error vectors
   timer.start("[prepare] sample primal error");
@@ -104,14 +105,13 @@ void PCG::prepare() {
   timer.start("[prepare] compute other secret vector");
   this->s1 = BitString(params.primal.k);
   for (size_t i = 0; i < params.primal.k; i++) {
-    for (uint32_t error : this->epsilon) {
-      if (this->H[{i, error}]) { this->s1[i] ^= 1; }
+    for (size_t j = 0 ; j < params.dual.t; j++) {
+      if (this->H[{i, j * params.dual.blockSize() + this->epsilon[j]}]) {
+        this->s1[i] ^= 1;
+      }
     }
   }
   timer.stop();
-
-  // free up this space as it is needed later
-  this->H = LPN::DualMatrix();
 
   // encrypt secret vectors
   timer.start("[prepare] encrypt secret vectors");
@@ -255,23 +255,8 @@ void PCG::online(
 std::pair<BitString, BitString> PCG::finalize(size_t other_id) {
   Timer timer;
 
-  // arrange our shares of the ε ⊗ s matrix by column
-  timer.start("[finalize] transpose send tensor");
-  std::vector<BitString> send_eXs_matrix(params.primal.k, BitString(params.dual.N()));
-  MULTI_TASK([this, &send_eXs_matrix](size_t start, size_t end) {
-    for (size_t c = start; c < end; c++) {
-      for (size_t p = 0; p < params.dual.t; p++) {
-        for (size_t r = 0; r < params.dual.blockSize(); r++) {
-          send_eXs_matrix[c][r] ^= this->send_eXs[p](r)[c];
-        }
-      }
-    }
-  }, params.primal.k);
-  for (PPRF& pprf : this->send_eXs) { pprf.clear(); }
-  timer.stop();
-
   // expand out ⟨ε ⊗ s⟩ pprfs
-  timer.start("[finalize] expand recv tensor");
+  timer.start("[finalize] expand ⟨ε ⊗ s⟩ pprfs");
   MULTI_TASK([this](size_t start, size_t end) {
     for (size_t i = start; i < end; i++) {
       this->recv_eXs[i].expand();
@@ -279,27 +264,14 @@ std::pair<BitString, BitString> PCG::finalize(size_t other_id) {
   }, this->recv_eXs.size());
   timer.stop();
 
-  // arrange our shares of the ε ⊗ s matrix by column
-  timer.start("[finalize] transpose recv tensor");
-  std::vector<BitString> recv_eXs_matrix(params.primal.k, BitString(params.dual.N()));
-  MULTI_TASK([this, &recv_eXs_matrix](size_t start, size_t end) {
-    for (size_t c = start; c < end; c++) {
-      for (size_t p = 0; p < params.dual.t; p++) {
-        for (size_t r = 0; r < params.dual.blockSize(); r++) {
-          recv_eXs_matrix[c][r] ^= this->recv_eXs[p](r)[c];
-        }
-      }
-    }
-  }, params.primal.k);
-  for (PPRF& pprf : this->recv_eXs) { pprf.clear(); }
-  timer.stop();
-
   // expand only the other pprfs that are needed
-  timer.start("[finalize] expand dpfs");
-  for (size_t i = 0; i < params.blocks(); i++) {
-    this->recv_eXas_eoe[i].expand();
-    this->recv_eXas[i].expand();
-  }
+  timer.start("[finalize] expand (⟨aᵢ,s⟩ · e) pprfs");
+  MULTI_TASK([this](size_t start, size_t end) {
+    for (size_t i = start; i < end; i++) {
+      this->recv_eXas_eoe[i].expand();
+      this->recv_eXas[i].expand();
+    }
+  }, params.blocks());
   timer.stop();
 
   // in each direction, concatenate the image for each error block to get final output
@@ -326,23 +298,19 @@ std::pair<BitString, BitString> PCG::finalize(size_t other_id) {
   for (DPF& dpf : this->recv_eXas)     { dpf.clear(); }
   timer.stop();
 
-  // recompute dual matrix needed for next step
-  timer.start("[finalize] resample dual matrix");
-  this->H = LPN::DualMatrix(params.dkey, params.dual);
-  this->B = LPN::MatrixProduct(A, H);
-  timer.stop();
-
   // compute shares of the ⟨bᵢ⊗ aᵢ,ε ⊗ s⟩ vector
   timer.start("[finalize] compute last term");
   auto baex_shares = TASK_REDUCE<std::pair<BitString, BitString>>(
-    [this, &send_eXs_matrix, &recv_eXs_matrix](size_t start, size_t end)
+    [this](size_t start, size_t end)
   {
     BitString send_out(end - start), recv_out(end - start);
     for (size_t i = start; i < end; i++) {
       BitString send_aXeXs(params.dual.N()), recv_aXeXs(params.dual.N());
       for (uint32_t idx : this->A.getNonZeroElements(i)) {
-        send_aXeXs ^= send_eXs_matrix[idx];
-        recv_aXeXs ^= recv_eXs_matrix[idx];
+        for (size_t n = 0; n < params.dual.N(); n++) {
+          send_aXeXs[n] ^= this->send_eXs[n / params.dual.blockSize()](n % params.dual.blockSize())[idx];
+          recv_aXeXs[n] ^= this->recv_eXs[n / params.dual.blockSize()](n % params.dual.blockSize())[idx];
+        }
       }
       BitString row = this->B[i];
       send_out[i - start] = row * send_aXeXs;
