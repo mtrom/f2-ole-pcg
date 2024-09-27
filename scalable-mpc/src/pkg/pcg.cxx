@@ -83,7 +83,6 @@ void PCG::prepare() {
   timer.start("[prepare] sample dual matrix");
   this->H = LPN::DualMatrix(params.dkey, params.dual);
   timer.stop();
-  this->B = LPN::MatrixProduct(A, H);
 
   // sample primal error vectors
   timer.start("[prepare] sample primal error");
@@ -112,6 +111,9 @@ void PCG::prepare() {
     }
   }
   timer.stop();
+
+  // free up this space as it is needed later
+  this->H = LPN::DualMatrix();
 
   // encrypt secret vectors
   timer.start("[prepare] encrypt secret vectors");
@@ -296,6 +298,12 @@ std::pair<BitString, BitString> PCG::finalize(size_t other_id) {
   for (DPF& dpf : this->recv_eXas_eoe) { dpf.clear(); }
   for (DPF& dpf : this->send_eXas)     { dpf.clear(); }
   for (DPF& dpf : this->recv_eXas)     { dpf.clear(); }
+  timer.stop();
+
+  // recompute dual matrix needed for next step
+  timer.start("[finalize] resample dual matrix");
+  this->H = LPN::DualMatrix(params.dkey, params.dual);
+  this->B = LPN::MatrixProduct(A, H);
   timer.stop();
 
   // compute shares of the ⟨bᵢ⊗ aᵢ,ε ⊗ s⟩ vector
