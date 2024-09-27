@@ -326,12 +326,7 @@ std::pair<BitString, BitString> PCG::finalize(size_t other_id) {
       }
     }
   }, params.primal.k);
-<<<<<<< HEAD
   for (PPRF& pprf : this->recv_eXs) { pprf.clear(); }
-=======
-  this->recv_eXs.clear();
-  transpose.stop();
->>>>>>> more verbosity
 
   // recompute dual matrix needed for next step
   Timer resample("[finalize] resample dual matrix");
