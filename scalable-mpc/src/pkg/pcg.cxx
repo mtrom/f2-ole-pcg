@@ -31,7 +31,7 @@ namespace Beaver {
 
 std::pair<size_t, size_t> PCG::numOTs(uint32_t other_id) const {
   size_t pprfs = (
-   this->params.dual.t * ((size_t) ceil(log2(this->params.dual.N())) + 1)
+   this->params.dual.t * ((size_t) ceil(log2(this->params.dual.blockSize())) + 1)
    + 2 * this->params.primal.t * ((size_t) ceil(log2(this->params.primal.blockSize())))
   );
   size_t eqtests = EqTest::numOTs(
@@ -63,7 +63,7 @@ std::pair<BitString, BitString> PCG::inputs() const {
 
 void PCG::prepare() {
   // initialize the pprfs that we are sending
-  this->send_eXs = PPRF::sampleMany(
+  this->send_eXs = PPRF::sample(
     params.dual.t, LAMBDA, params.primal.k, params.dual.blockSize()
   );
   this->send_eXas_eoe = DPF::sample(params.primal.t, LAMBDA, params.primal.blockSize());
@@ -180,7 +180,7 @@ void PCG::online(
     PPRF::send(this->send_eXs, this->s0, channel, srots);
   }, {
     this->recv_eXs = PPRF::receive(
-      this->epsilon, LAMBDA, params.primal.k, params.dual.blockSize(), channel, rrots, true
+      this->epsilon, LAMBDA, params.primal.k, params.dual.blockSize(), channel, rrots
     );
   });
 }
@@ -188,7 +188,11 @@ void PCG::online(
 std::pair<BitString, BitString> PCG::finalize(size_t other_id) {
 
   // expand out ⟨ε ⊗ s⟩ pprfs
-  for (PPRF& pprf : this->recv_eXs) { pprf.expand(); }
+  MULTI_TASK([this](size_t start, size_t end) {
+    for (size_t i = start; i < end; i++) {
+      this->recv_eXs[i].expand();
+    }
+  }, this->recv_eXs.size());
 
   // expand only the other pprfs that are needed
   for (size_t i = 0; i < params.blocks(); i++) {
