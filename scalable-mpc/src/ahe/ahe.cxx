@@ -142,22 +142,34 @@ std::vector<AHE::Ciphertext> AHE::receive(size_t n, Channel channel, bool compre
   std::vector<unsigned char> message(size);
   channel->read(message.data(), message.size());
 
-  std::vector<AHE::Ciphertext> out;
-  unsigned char* iter = message.data();
-  for (size_t i = 0; i < n; i++) {
-    EC::Point first, second;
-    if (!compress) {
-      first.fromBytes(iter);
+  return TASK_REDUCE<std::vector<AHE::Ciphertext>>(
+    [&compress, &message, &their_prf](size_t start, size_t end)
+  {
+    EC::Curve curve; // initalize relic on this thread
+    std::vector<AHE::Ciphertext> out;
+    unsigned char* iter = (
+      message.data() + ((compress ? 1 : 2) * EC::Point::size * start)
+    );
+    for (size_t i = start; i < end; i++) {
+      EC::Point first, second;
+      if (!compress) {
+        first.fromBytes(iter);
+        iter += EC::Point::size;
+      } else {
+        BitString seed = their_prf(i, EC::Point::fromHashLength * 8);
+        first = EC::Point::fromHash(seed.data());
+      }
+      second.fromBytes(iter);
       iter += EC::Point::size;
-    } else {
-      BitString seed = their_prf(i, EC::Point::fromHashLength * 8);
-      first = EC::Point::fromHash(seed.data());
+
+      out.push_back(std::make_pair(first, second));
     }
-    second.fromBytes(iter);
-    iter += EC::Point::size;
-
-    out.push_back(std::make_pair(first, second));
-  }
-
-  return out;
+    return out;
+  }, [](std::vector<std::vector<AHE::Ciphertext>> results) {
+    std::vector<AHE::Ciphertext> out;
+    for (auto& result : results) {
+      out.insert(out.end(), result.begin(), result.end());
+    }
+    return out;
+  }, n);
 }
