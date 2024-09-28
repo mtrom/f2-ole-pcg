@@ -115,10 +115,11 @@ public:
   }
 
   std::string toString() const {
-    return (
-      "[LPN::Primal] " + primal.toString() + "\n" +
-      "[LPN::Dual]   " + dual.toString()
-    );
+    std::ostringstream out;
+    out << "[PCG] correlations " << size << "\n";
+    out << "[LPN::Primal] " << primal.toString() << "\n";
+    out << "[LPN::Dual]   " << dual.toString();
+    return out.str();
   }
 
   size_t numRandomOTs() const {
