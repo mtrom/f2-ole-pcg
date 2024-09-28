@@ -1,5 +1,6 @@
 #include <iostream>
 
+#include <unordered_map>
 #include <boost/program_options.hpp>
 
 #include "pkg/lpn.hpp"
@@ -50,6 +51,34 @@ int main(int argc, char *argv[]) {
       BitString::sample(LAMBDA), c, td
     );
     std::cout << params.toString() << std::endl;
+
+    Timer timer;
+
+    timer.start("sample");
+    BitString send_aXeXs(params.dual.N());
+    auto send_eXs = PPRF::sample(
+      params.dual.t, LAMBDA, params.primal.k, params.dual.blockSize()
+    );
+    timer.stop();
+
+    timer.start("loop");
+    for (size_t n = 0; n < params.dual.N(); n++) {
+      send_aXeXs[n] ^= 1;
+    }
+    timer.stop();
+
+    timer.start("access");
+    for (size_t n = 0; n < params.dual.N(); n++) {
+      send_eXs[n / params.dual.blockSize()](n % params.dual.blockSize());
+    }
+    timer.stop();
+
+    timer.start("xor with pprf");
+    for (size_t n = 0; n < params.dual.N(); n++) {
+      send_aXeXs[n] ^= send_eXs[n / params.dual.blockSize()](n % params.dual.blockSize())[5];
+    }
+    timer.stop();
+    std::cout << send_aXeXs[{0, 16}] << std::endl;;
   } catch (const options::error &ex) {
     std::cerr << "[memcheck] error: " << ex.what() << std::endl;
     return 1;
