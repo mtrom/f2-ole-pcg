@@ -33,6 +33,8 @@ public:
   // expand a pprf that has been shared
   void expand();
 
+  std::shared_ptr<std::vector<BitString>> getImage() { return leafs; }
+
   size_t domain() const { return domainsize; }
 
   void clear() { leafs.reset(); levels.clear(); keys.clear(); }

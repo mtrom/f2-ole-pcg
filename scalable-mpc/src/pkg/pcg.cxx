@@ -309,20 +309,17 @@ std::pair<BitString, BitString> PCG::finalize(size_t other_id) {
   // compute shares of the ⟨bᵢ⊗ aᵢ,ε ⊗ s⟩ vector
   timer.start("[finalize] compute last term");
 
-  std::cout << "LOOPING FOR " << params.size << std::endl;
   auto baex_shares = TASK_REDUCE<std::pair<BitString, BitString>>(
     [this](size_t start, size_t end)
   {
-    std::cout << "IN THE LOOPING FOR " << start << " TO " << end << std::endl;
     BitString send_out(end - start), recv_out(end - start);
     for (size_t i = start; i < end; i++) {
       BitString send_aXeXs(params.dual.N()), recv_aXeXs(params.dual.N());
       for (uint32_t idx : this->A.getNonZeroElements(i)) {
         for (size_t n = 0; n < params.dual.N(); n++) {
-          send_aXeXs[n] ^= this->send_eXs[n / params.dual.blockSize()](n % params.dual.blockSize())[idx];
-          recv_aXeXs[n] ^= this->recv_eXs[n / params.dual.blockSize()](n % params.dual.blockSize())[idx];
+          send_aXeXs[n] ^= this->send_eXs[n / params.dual.blockSize()].getImage()->operator[](n % params.dual.blockSize())[idx];
+          recv_aXeXs[n] ^= this->recv_eXs[n / params.dual.blockSize()].getImage()->operator[](n % params.dual.blockSize())[idx];
         }
-        std::cout << "IDX " << idx << "DONE." << std::endl;
       }
       BitString row = this->B[i];
       send_out[i - start] = row * send_aXeXs;
