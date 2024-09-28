@@ -64,17 +64,20 @@ int main(int argc, char *argv[]) {
 
     timer.start("convert");
     std::vector<unsigned char> raw;
-    for (size_t t = 0; t < 8; t++) {
+    for (size_t t = 0; t < params.dual.t; t++) {
       auto image = send_eXs[t].getImage();
       for (size_t i = 0; i < params.dual.blockSize(); i++) {
         raw.insert(raw.end(), image->operator[](i).begin(), image->operator[](i).end());
       }
+      image->clear();
     }
     timer.stop();
 
+    const uint32_t TRANPOSE_BLOCK_SIZE = (1 << 16);
+
     timer.start("transpose");
     std::vector<unsigned char> transpose(raw.size());
-    sse_trans(raw.data(), transpose.data(), 8 * params.dual.blockSize(), params.primal.k / 8);
+    sse_trans(raw.data(), transpose.data(), TRANPOSE_BLOCK_SIZE, params.primal.k / 8);
     timer.stop();
   } catch (const options::error &ex) {
     std::cerr << "[memcheck] error: " << ex.what() << std::endl;
