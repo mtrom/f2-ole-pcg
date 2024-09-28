@@ -10,6 +10,7 @@
 #include "util/defines.hpp"
 #include "util/random.hpp"
 #include "util/timer.hpp"
+#include "util/transpose.hpp"
 
 namespace options = boost::program_options;
 
@@ -61,24 +62,20 @@ int main(int argc, char *argv[]) {
     );
     timer.stop();
 
-    timer.start("loop");
-    for (size_t n = 0; n < params.dual.N(); n++) {
-      send_aXeXs[n] ^= 1;
+    timer.start("convert");
+    std::vector<unsigned char> raw;
+    for (size_t t = 0; t < 8; t++) {
+      auto image = send_eXs[t].getImage();
+      for (size_t i = 0; i < params.dual.blockSize(); i++) {
+        raw.insert(raw.end(), image->operator[](i).begin(), image->operator[](i).end());
+      }
     }
     timer.stop();
 
-    timer.start("access");
-    for (size_t n = 0; n < params.dual.N(); n++) {
-      send_eXs[n / params.dual.blockSize()](n % params.dual.blockSize());
-    }
+    timer.start("transpose");
+    std::vector<unsigned char> transpose(raw.size());
+    sse_trans(raw.data(), transpose.data(), 8 * params.dual.blockSize(), params.primal.k / 8);
     timer.stop();
-
-    timer.start("xor with pprf");
-    for (size_t n = 0; n < params.dual.N(); n++) {
-      send_aXeXs[n] ^= send_eXs[n / params.dual.blockSize()](n % params.dual.blockSize())[5];
-    }
-    timer.stop();
-    std::cout << send_aXeXs[{0, 16}] << std::endl;;
   } catch (const options::error &ex) {
     std::cerr << "[memcheck] error: " << ex.what() << std::endl;
     return 1;
