@@ -2,8 +2,8 @@
 #include <emmintrin.h>
 #include <stdint.h>
 
-void sse_trans(uint8_t const *inp, uint8_t *out, int nrows, int ncols) {
-#   define INP(x,y) inp[(x)*ncols/8 + (y)/8]
+void sse_trans(uint8_t** inp, uint8_t *out, int nrows, int ncols) {
+#   define INP(x,y) inp[x][(y)/8]
 #   define OUT(x,y) out[(y)*nrows/8 + (x)/8]
     int rr, cc, i, h;
     union { __m128i x; uint8_t b[16]; } tmp;

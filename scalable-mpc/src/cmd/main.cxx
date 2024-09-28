@@ -63,17 +63,16 @@ int main(int argc, char *argv[]) {
     timer.stop();
 
     timer.start("convert");
-    std::vector<unsigned char> raw;
+    std::vector<unsigned char*> raw;
     for (size_t t = 0; t < params.dual.t; t++) {
       auto image = send_eXs[t].getImage();
       for (size_t i = 0; i < params.dual.blockSize(); i++) {
-        raw.insert(raw.end(), image->operator[](i).begin(), image->operator[](i).end());
+        raw.push_back(image->operator[](i).data());
       }
-      image->clear();
     }
     timer.stop();
 
-    const uint32_t TRANPOSE_BLOCK_SIZE = (1 << 16);
+    const uint32_t TRANPOSE_BLOCK_SIZE = (1 << 8);
 
     timer.start("transpose");
     std::vector<unsigned char> transpose(raw.size());
