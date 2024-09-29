@@ -34,10 +34,15 @@ PPRF::PPRF(BitString key, size_t outsize, size_t domainsize)
 
   BitString left(this->outsize), right(this->outsize);
   for (size_t i = 0; i < this->leafs->size(); i++) {
-    PRF<BitString> prf((*this->leafs)[i]);
-    (*this->leafs)[i] = prf(0, this->outsize);
-    if (i % 2 == 0) { left ^= (*this->leafs)[i]; }
-    else            { right ^= (*this->leafs)[i]; }
+    if (i >= this->domainsize) {
+      // if domainsize isn't (2^x) toss out the extra leafs
+      (*this->leafs)[i] = BitString();
+    } else {
+      PRF<BitString> prf((*this->leafs)[i]);
+      (*this->leafs)[i] = prf(0, this->outsize);
+      if (i % 2 == 0) { left ^= (*this->leafs)[i]; }
+      else            { right ^= (*this->leafs)[i]; }
+    }
   }
 
   this->levels[this->depth] = std::make_pair(left, right);
@@ -83,10 +88,15 @@ void PPRF::expand() {
   BitString left(this->outsize), right(this->outsize);
   for (size_t i = 0; i < this->leafs->size(); i++) {
     if ((*this->leafs)[i].size() == 0) { continue; }
-    PRF<BitString> prf((*this->leafs)[i]);
-    (*this->leafs)[i] = prf(0, this->outsize);
-    if (i % 2 == 0) { left ^= (*this->leafs)[i]; }
-    else            { right ^= (*this->leafs)[i]; }
+    if (i >= this->domainsize) {
+      // if domainsize isn't (2^x) toss out the extra leafs
+      (*this->leafs)[i] = BitString();
+    } else {
+      PRF<BitString> prf((*this->leafs)[i]);
+      (*this->leafs)[i] = prf(0, this->outsize);
+      if (i % 2 == 0) { left ^= (*this->leafs)[i]; }
+      else            { right ^= (*this->leafs)[i]; }
+    }
   }
 
   // put the punctured output where it should be

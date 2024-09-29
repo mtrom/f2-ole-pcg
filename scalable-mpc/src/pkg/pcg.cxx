@@ -261,6 +261,7 @@ BitString Sender::finalize() {
 
     out += image;
   }
+  if (out.size() != params.size) { out = out[{0, params.size}]; }
   timer.stop();
 
   // free up used memory
@@ -325,6 +326,7 @@ BitString Receiver::finalize() {
 
     out += image;
   }
+  if (out.size() != params.size) { out = out[{0, params.size}]; }
   timer.stop();
 
   timer.start("[finalize] clear memory");

@@ -111,7 +111,7 @@ public:
   size_t eqTestThreshold = 3;
 
   size_t blocks() {
-    return (size_t) ceil(size / primal.blockSize());
+    return (size_t) ceil((float) size / primal.blockSize());
   }
 
   std::string toString() const {
