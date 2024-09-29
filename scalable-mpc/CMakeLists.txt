@@ -8,7 +8,7 @@ set(ONLINE_EXEC online)
 set(LIBRARY_NAME scalable_mpc_lib)
 
 # packages
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -O3 -std=c++14 -maes -mavx -mpclmul -mbmi2 -no-pie -Wno-ignored-attributes")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -O3 -std=c++14 -maes -mavx -mpclmul -mbmi2 -msse2 -no-pie -Wno-ignored-attributes")
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
 include(Boost)
 include(Cryptopp)
@@ -45,6 +45,7 @@ set(SOURCES
   src/util/circuit.cxx
   src/util/concurrency.cxx
   src/util/random.cxx
+  src/util/transpose.cxx
 )
 
 add_library(${LIBRARY_NAME} ${SOURCES})

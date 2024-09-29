@@ -9,10 +9,12 @@
 #include "util/defines.hpp"
 #include "util/random.hpp"
 #include "util/timer.hpp"
+#include "util/transpose.hpp"
 
 namespace options = boost::program_options;
 
 int main(int argc, char *argv[]) {
+  Timer timer;
   options::variables_map vm;
   options::options_description desc("allowed options");
 
@@ -50,6 +52,17 @@ int main(int argc, char *argv[]) {
       BitString::sample(LAMBDA), c, td
     );
     std::cout << params.toString() << std::endl;
+
+    timer.start("sample");
+    auto eXs = PPRF::sample(
+      params.dual.t, LAMBDA, params.primal.k, params.dual.blockSize()
+    );
+    timer.stop();
+
+    timer.start("transpose");
+    std::vector<BitString> new_matrix = transpose(eXs, params);
+    timer.stop();
+    std::cout << GREEN << "[memchec] success." << RESET << std::endl;
   } catch (const options::error &ex) {
     std::cerr << "[memcheck] error: " << ex.what() << std::endl;
     return 1;

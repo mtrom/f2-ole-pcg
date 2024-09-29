@@ -10,6 +10,7 @@
 #include "util/concurrency.hpp"
 #include "util/defines.hpp"
 #include "util/timer.hpp"
+#include "util/transpose.hpp"
 
 #define REPORT_COMMS() \
   std::cout << "         upload   = " << channel->bytesIn - upload << " B" << std::endl;    \
@@ -241,6 +242,11 @@ void Receiver::online(Channel channel, RandomOTSender srots, RandomOTReceiver rr
 BitString Sender::finalize() {
   Timer timer;
 
+  // arrange our shares of the ε ⊗ s matrix by column
+  timer.start("[finalize] transpose (ε ⊗ s) matrix");
+  std::vector<BitString> eXs_matrix = transpose(this->eXs, params);
+  timer.stop();
+
   // expand only the other pprfs that are needed
   timer.start("[finalize] expand (⟨aᵢ,s⟩ · e) pprfs");
   MULTI_TASK([this](size_t start, size_t end) {
@@ -272,14 +278,12 @@ BitString Sender::finalize() {
 
   // compute shares of the ⟨bᵢ⊗ aᵢ,ε ⊗ s⟩ vector
   timer.start("[finalize] compute last term");
-  auto baex = TASK_REDUCE<BitString>([this](size_t start, size_t end) {
+  auto baex = TASK_REDUCE<BitString>([this, &eXs_matrix](size_t start, size_t end) {
     BitString out(end - start);
     for (size_t i = start; i < end; i++) {
       BitString aXeXs(params.dual.N());
       for (uint32_t idx : this->A.getNonZeroElements(i)) {
-        for (size_t n = 0; n < params.dual.N(); n++) {
-          aXeXs[n] ^= this->eXs[n / params.dual.blockSize()](n % params.dual.blockSize())[idx];
-        }
+        aXeXs ^= eXs_matrix[idx];
       }
       out[i - start] = this->B[i] * aXeXs;
     }
@@ -305,6 +309,11 @@ BitString Receiver::finalize() {
       this->eXs[i].expand();
     }
   }, this->eXs.size());
+  timer.stop();
+
+  // arrange our shares of the ε ⊗ s matrix by column
+  timer.start("[finalize] transpose (ε ⊗ s) matrix");
+  std::vector<BitString> eXs_matrix = transpose(this->eXs, params);
   timer.stop();
 
   timer.start("[finalize] expand (⟨aᵢ,s⟩ · e) ⊕ (e₀ ○ e₁) pprfs");
@@ -336,14 +345,12 @@ BitString Receiver::finalize() {
 
   // compute shares of the ⟨bᵢ⊗ aᵢ,ε ⊗ s⟩ vector
   timer.start("[finalize] compute last term");
-  auto baex = TASK_REDUCE<BitString>([this](size_t start, size_t end) {
+  auto baex = TASK_REDUCE<BitString>([this, &eXs_matrix](size_t start, size_t end) {
     BitString out(end - start);
     for (size_t i = start; i < end; i++) {
       BitString aXeXs(params.dual.N());
       for (uint32_t idx : this->A.getNonZeroElements(i)) {
-        for (size_t n = 0; n < params.dual.N(); n++) {
-          aXeXs[n] ^= this->eXs[n / params.dual.blockSize()](n % params.dual.blockSize())[idx];
-        }
+        aXeXs ^= eXs_matrix[idx];
       }
       out[i - start] = this->B[i] * aXeXs;
     }
