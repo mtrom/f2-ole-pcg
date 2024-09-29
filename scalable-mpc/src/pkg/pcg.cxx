@@ -241,6 +241,20 @@ void Receiver::online(Channel channel, RandomOTSender srots, RandomOTReceiver rr
 BitString Sender::finalize() {
   Timer timer;
 
+  // arrange our shares of the ε ⊗ s matrix by column
+  timer.start("[finalize] transpose (ε ⊗ s) matrix");
+  std::vector<BitString> eXs_matrix(params.primal.k, BitString(params.dual.N()));
+  MULTI_TASK([this, &eXs_matrix](size_t start, size_t end) {
+    size_t blockSize = params.dual.blockSize();
+    for (size_t c = start; c < end; c++) {
+      for (size_t n = 0; n < params.dual.N(); n++) {
+        eXs_matrix[c][n] ^= this->eXs[n / blockSize](n % blockSize)[c];
+      }
+    }
+  }, params.primal.k);
+  for (PPRF& pprf : this->eXs) { pprf.clear(); }
+  timer.stop();
+
   // expand only the other pprfs that are needed
   timer.start("[finalize] expand (⟨aᵢ,s⟩ · e) pprfs");
   MULTI_TASK([this](size_t start, size_t end) {
@@ -272,14 +286,12 @@ BitString Sender::finalize() {
 
   // compute shares of the ⟨bᵢ⊗ aᵢ,ε ⊗ s⟩ vector
   timer.start("[finalize] compute last term");
-  auto baex = TASK_REDUCE<BitString>([this](size_t start, size_t end) {
+  auto baex = TASK_REDUCE<BitString>([this, &eXs_matrix](size_t start, size_t end) {
     BitString out(end - start);
     for (size_t i = start; i < end; i++) {
       BitString aXeXs(params.dual.N());
       for (uint32_t idx : this->A.getNonZeroElements(i)) {
-        for (size_t n = 0; n < params.dual.N(); n++) {
-          aXeXs[n] ^= this->eXs[n / params.dual.blockSize()](n % params.dual.blockSize())[idx];
-        }
+        aXeXs ^= eXs_matrix[idx];
       }
       out[i - start] = this->B[i] * aXeXs;
     }
