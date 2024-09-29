@@ -30,9 +30,6 @@ public:
   virtual void sizeReduction(uint32_t size) = 0;
   virtual void productSharing() = 0;
   BitString run(std::vector<uint32_t> input);
-  std::pair<BitString, BitString> run(
-    std::vector<uint32_t> in1, std::vector<uint32_t> in2
-  );
 
   // number of oblivious transfers required to run
   static uint32_t numOTs(uint32_t length, int threshold, size_t tests);

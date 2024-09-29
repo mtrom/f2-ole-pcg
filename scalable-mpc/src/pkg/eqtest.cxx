@@ -15,21 +15,13 @@ uint32_t EqTest::numOTs(uint32_t length, int threshold, size_t tests) {
 }
 
 BitString EqTest::run(std::vector<uint32_t> inputs) {
-  return run(inputs, std::vector<uint32_t>()).first;
-}
-
-std::pair<BitString, BitString> EqTest::run(
-  std::vector<uint32_t> in1, std::vector<uint32_t> in2
-) {
   // we've preparing for exactly `tests` inputs
-  assert((in1.size() + in2.size()) == this->tests);
+  assert(inputs.size() == this->tests);
 
   for (size_t j = this->length; j > this->threshold; j = (size_t) ceil(log2(j + 1))) {
     this->sizeReduction(j);
   }
   this->productSharing();
-
-  auto inputs = boost::join(in1, in2);
 
   std::vector<BitString> reduced(this->tests);
   for (size_t t = 0; t < this->tests; t++) {
@@ -94,7 +86,7 @@ std::pair<BitString, BitString> EqTest::run(
     // TODO: There is a bug that occurs when the reduced length != threshold.
     // It's not entirely clear how this should be resolved as the paper doesn't seem
     // to address it. I suspect you just use the reduced length rather than the
-    // threadshold for the rest of the computation, but that needs to be tested.
+    // threshold for the rest of the computation, but that needs to be tested.
     //
     // This can be reproduced by using (length = 8, threshold = 5)
     throw std::runtime_error("[EqTest] threshold error");
@@ -117,38 +109,23 @@ std::pair<BitString, BitString> EqTest::run(
   }
 
   // assemble output for both inputs
-  BitString out1(in1.size());
-  BitString out2(in2.size());
+  BitString out(inputs.size());
 
-  for (size_t t = 0; t < out1.size(); t++) {
-    out1[t] = true;
+  for (size_t t = 0; t < out.size(); t++) {
+    out[t] = true;
     for (size_t l = 0; l < this->threshold; l++) {
-      out1[t] &= sender ? true ^ reduced[t][l] : reduced[t][l];
+      out[t] &= sender ? true ^ reduced[t][l] : reduced[t][l];
     }
     // start bit for this input's beta
     size_t startbit = t * ((1 << this->threshold) - 2);
 
     for (size_t k = 0; k < (1 << this->threshold) - 2; k++) {
-      out1[t] ^= ab[t][k] ^ (beta[startbit + k] & (sender ? X[t][k] : rs[t][k]));
+      out[t] ^= ab[t][k] ^ (beta[startbit + k] & (sender ? X[t][k] : rs[t][k]));
     }
-    out1[t] ^= alpha[rbits + t] ^ beta[rbits + t];
+    out[t] ^= alpha[rbits + t] ^ beta[rbits + t];
   }
 
-  for (size_t t = out1.size(); t < this->tests; t++) {
-    out2[t - out1.size()] = true;
-    for (size_t l = 0; l < this->threshold; l++) {
-      out2[t - out1.size()] &= sender ? true ^ reduced[t][l] : reduced[t][l];
-    }
-    // start bit for this input's beta
-    size_t startbit = t * ((1 << this->threshold) - 2);
-
-    for (size_t k = 0; k < (1 << this->threshold) - 2; k++) {
-      out2[t - out1.size()] ^= ab[t][k] ^ (beta[startbit + k] & (sender ? X[t][k] : rs[t][k]));
-    }
-    out2[t - out1.size()] ^= alpha[rbits + t] ^ beta[rbits + t];
-  }
-
-  return std::make_pair(out1, out2);
+  return out;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

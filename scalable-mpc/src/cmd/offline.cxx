@@ -15,8 +15,6 @@
 #define BASE_PORT 3200
 #define COMM_SLEEP 500
 #define COMM_TIMEOUT 5000
-#define SEND_ID 0
-#define RECV_ID 1
 
 
 using address = boost::asio::ip::address;
@@ -30,7 +28,7 @@ void runSender(const PCGParams& params, const std::string& host) {
   SocketPartyData their_socket(address::from_string(host), BASE_PORT);
 
   timer.start("[offline] setup");
-  Beaver::PCG pcg(SEND_ID, params);
+  Beaver::Sender pcg(params);
   timer.stop();
 
   timer.start("[offline] prepare");
@@ -44,7 +42,7 @@ void runSender(const PCGParams& params, const std::string& host) {
   timer.start("[offline] online");
   Timer subtimer("[online] ot ext");
   size_t srots, rrots;
-  std::tie(srots, rrots) = pcg.numOTs(RECV_ID);
+  std::tie(srots, rrots) = pcg.numOTs();
 
   RandomOTSender sender;
   sender.run(srots, channel, BASE_PORT + 2);
@@ -53,7 +51,7 @@ void runSender(const PCGParams& params, const std::string& host) {
   receiver.run(rrots, channel, host, BASE_PORT + 2);
   subtimer.stop();
 
-  pcg.online(RECV_ID, channel, sender, receiver);
+  pcg.online(channel, sender, receiver);
   timer.stop();
 
   float upload = (float) channel->bytesIn / 1000000;
@@ -65,21 +63,21 @@ void runSender(const PCGParams& params, const std::string& host) {
   channel.reset();
 
   timer.start("[offline] finalize");
-  std::pair<BitString, BitString> output = pcg.finalize(RECV_ID);
+  BitString output = pcg.finalize();
   timer.stop();
 
   std::cout << GREEN << "[offline] done." << RESET << std::endl;
 }
 
 void runReceiver(const PCGParams& params, const std::string& host) {
-  std::cout << params.toString();
+  std::cout << params.toString() << std::endl;
   Timer timer;
 
   SocketPartyData my_socket(address::from_string("0.0.0.0"), BASE_PORT);
   SocketPartyData their_socket(address::from_string(host), BASE_PORT);
 
   timer.start("[offline] setup");
-  Beaver::PCG pcg(RECV_ID, params);
+  Beaver::Receiver pcg(params);
   timer.stop();
 
   timer.start("[offline] prepare");
@@ -93,7 +91,7 @@ void runReceiver(const PCGParams& params, const std::string& host) {
   timer.start("[offline] online");
   Timer subtimer("[online] ot ext");
   size_t srots, rrots;
-  std::tie(srots, rrots) = pcg.numOTs(SEND_ID);
+  std::tie(srots, rrots) = pcg.numOTs();
 
   RandomOTReceiver receiver;
   receiver.run(rrots, channel, host, BASE_PORT + 2);
@@ -102,7 +100,7 @@ void runReceiver(const PCGParams& params, const std::string& host) {
   sender.run(srots, channel, BASE_PORT + 2);
   subtimer.stop();
 
-  pcg.online(SEND_ID, channel, sender, receiver);
+  pcg.online(channel, sender, receiver);
   timer.stop();
 
   float upload = (float) channel->bytesIn / 1000000;
@@ -114,7 +112,7 @@ void runReceiver(const PCGParams& params, const std::string& host) {
   channel.reset();
 
   timer.start("[offline] finalize");
-  std::pair<BitString, BitString> output = pcg.finalize(SEND_ID);
+  BitString output = pcg.finalize();
   timer.stop();
 
   std::cout << GREEN << "[offline] done." << RESET << std::endl;
@@ -132,11 +130,11 @@ void runBoth(const PCGParams& params) {
     Channel channel = std::make_shared<CommPartyTCPSynced>(ios, asocket, bsocket);
     channel->join(COMM_SLEEP, COMM_TIMEOUT);
 
-    Beaver::PCG pcg(SEND_ID, params);
+    Beaver::Sender pcg(params);
 
     timer.start("[offline] ot ext");
     size_t srots, rrots;
-    std::tie(srots, rrots) = pcg.numOTs(RECV_ID);
+    std::tie(srots, rrots) = pcg.numOTs();
 
     RandomOTSender sender;
     sender.run(srots, channel, BASE_PORT + 2);
@@ -150,7 +148,7 @@ void runBoth(const PCGParams& params) {
     timer.stop();
 
     timer.start("[offline] online");
-    pcg.online(RECV_ID, channel, sender, receiver);
+    pcg.online(channel, sender, receiver);
     timer.stop();
 
     float upload = (float) channel->bytesIn / 1000000;
@@ -160,11 +158,11 @@ void runBoth(const PCGParams& params) {
     std::cout << "          total    = " << (upload + download) << "MB" << std::endl;
 
     timer.start("[offline] finalize");
-    std::pair<BitString, BitString> output = pcg.finalize(RECV_ID);
+    BitString output = pcg.finalize();
     timer.stop();
 
-    std::pair<BitString, BitString> inputs = pcg.inputs();
-    return std::make_tuple(inputs.first, inputs.second, output.first, output.second);
+    BitString inputs = pcg.inputs();
+    return std::make_tuple(inputs, output);
   });
 
   auto bob = std::async(std::launch::async, [asocket, bsocket, params]() {
@@ -172,10 +170,10 @@ void runBoth(const PCGParams& params) {
     Channel channel = std::make_shared<CommPartyTCPSynced>(ios, bsocket, asocket);
     channel->join(COMM_SLEEP, COMM_TIMEOUT);
 
-    Beaver::PCG pcg(RECV_ID, params);
+    Beaver::Receiver pcg(params);
 
     size_t srots, rrots;
-    std::tie(srots, rrots) = pcg.numOTs(SEND_ID);
+    std::tie(srots, rrots) = pcg.numOTs();
 
     RandomOTReceiver receiver;
     receiver.run(rrots, channel, "localhost", BASE_PORT + 2);
@@ -183,17 +181,17 @@ void runBoth(const PCGParams& params) {
     RandomOTSender sender;
     sender.run(srots, channel, BASE_PORT + 2);
 
-    std::pair<BitString, BitString> output = pcg.run(SEND_ID, channel, sender, receiver);
-    std::pair<BitString, BitString> inputs = pcg.inputs();
+    BitString output = pcg.run(channel, sender, receiver);
+    BitString inputs = pcg.inputs();
 
-    return std::make_tuple(inputs.first, inputs.second, output.first, output.second);
+    return std::make_tuple(inputs, output);
   });
 
-  BitString a0, a1, b0, b1, c0, c1, d0, d1;
-  std::tie(a0, b0, c0, d0) = alice.get();
-  std::tie(a1, b1, c1, d1) = bob.get();
+  BitString a, b, c0, c1;
+  std::tie(a, c0) = alice.get();
+  std::tie(b, c1) = bob.get();
 
-  if ((a0 & b1) == (c0 ^ c1) && (a1 & b0) == (d0 ^ d1)) {
+  if ((a & b) == (c0 ^ c1)) {
     std::cout << GREEN << "[offline] success." << RESET << std::endl;
   } else {
     std::cout << RED << "[offline] failure." << RESET << std::endl;

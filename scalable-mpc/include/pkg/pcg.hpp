@@ -20,37 +20,35 @@ namespace Beaver {
 
 class PCG {
 public:
-  PCG(uint32_t id, const PCGParams& params) : id(id), params(params), ahe(params.primal.l) { }
+  PCG(const PCGParams& params) : params(params), ahe(params.primal.l) { }
+
+  // run entire protocol
+  BitString run(Channel channel, RandomOTSender srots, RandomOTReceiver rrots) {
+    prepare();
+    online(channel, srots, rrots);
+    return finalize();
+  };
 
   // non-interactive steps to prepare for the protocol
-  void prepare();
+  virtual void prepare() = 0;
 
   // interactive steps during the protocol
-  void online(
-    uint32_t other_id, Channel channel, RandomOTSender srots, RandomOTReceiver rrots
-  );
+  virtual void online(Channel channel, RandomOTSender srots, RandomOTReceiver rrots) = 0 ;
 
   // non-interactive steps after online to finalize the output correlations
-  std::pair<BitString, BitString> finalize(size_t other_id);
-
-  // run the entire protocol with party `other_id`
-  std::pair<BitString, BitString> run(
-    uint32_t other_id, Channel channel, RandomOTSender srots, RandomOTReceiver rrots
-  );
+  virtual BitString finalize() = 0;
 
   // return the programmed inputs
-  std::pair<BitString, BitString> inputs() const;
+  BitString inputs() const;
 
   // required number of oblivious transfers for one protocol run based on `params`
-  std::pair<size_t, size_t> numOTs(uint32_t other_id) const;
+  virtual std::pair<size_t, size_t> numOTs() const = 0;
 
 protected:
   std::vector<AHE::Ciphertext> homomorphicInnerProduct(
-    const std::vector<AHE::Ciphertext>& enc_s, bool sender
+    const std::vector<AHE::Ciphertext>& enc_s
   ) const;
 
-private:
-  uint32_t id;
   PCGParams params;
   AHE ahe;
 
@@ -60,24 +58,42 @@ private:
   LPN::MatrixProduct B; // = AH
 
   // primal lpn secret vectors & errors
-  BitString s0, s1;
-  std::vector<uint32_t> e0, e1;
+  BitString s;
+  std::vector<uint32_t> e;
 
+  // ciphertext of secret vector
+  std::vector<AHE::Ciphertext> enc_s;
+
+  // random mask nonces
+  BitString masks;
+
+  // protocol pprfs
+  std::vector<PPRF> eXs;
+  std::vector<DPF> eXas_eoe, eXas;
+};
+
+class Sender : public PCG {
+public:
+  Sender(const PCGParams& params) : PCG(params) { }
+  void prepare() override;
+  void online(Channel channel, RandomOTSender srots, RandomOTReceiver rrots) override;
+  BitString finalize() override;
+  std::pair<size_t, size_t> numOTs() const override;
+};
+
+class Receiver : public PCG {
+public:
+  Receiver(const PCGParams& params) : PCG(params) { }
+  void prepare() override;
+  void online(Channel channel, RandomOTSender srots, RandomOTReceiver rrots) override;
+  BitString finalize() override;
+  std::pair<size_t, size_t> numOTs() const override;
+
+protected:
   // dual lpn error
   std::vector<uint32_t> epsilon;
 
-  std::vector<AHE::Ciphertext> enc_s0, enc_s1;
-
-  BitString send_masks, recv_masks;
-
-  std::unique_ptr<EqTest> eqtester;
-
-  // pprfs for both pcg directions
-  std::vector<PPRF> send_eXs, recv_eXs;
-  std::vector<DPF> send_eXas_eoe, recv_eXas_eoe;
-  std::vector<DPF> send_eXas, recv_eXas;
-
-  BitString recv_eoe, send_eoe;
+  BitString eoe;
 };
 
 ////////////////////////////////////////////////////////////////////////////////

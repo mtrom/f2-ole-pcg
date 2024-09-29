@@ -73,12 +73,11 @@ TEST_F(PCGTests, PCGRun) {
     BitString::sample(LAMBDA), 1 << 12, 1 << 7, 1 << 6, 1 << 3,
     BitString::sample(LAMBDA), 4, 7
   );
-  const uint32_t ALICE_ID = 0, BOB_ID = 1;
 
-  Beaver::PCG alice(ALICE_ID, params);
-  Beaver::PCG bob(BOB_ID, params);
+  Beaver::Sender alice(params);
+  Beaver::Receiver bob(params);
 
-  std::pair<size_t, size_t> nOTs = alice.numOTs(BOB_ID);
+  std::pair<size_t, size_t> nOTs = alice.numOTs();
 
   RandomOTSender alice_srots, bob_srots;
   RandomOTReceiver alice_rrots, bob_rrots;
@@ -86,28 +85,25 @@ TEST_F(PCGTests, PCGRun) {
   std::tie(bob_srots, alice_rrots) = this->mockRandomOTs(nOTs.second);
 
   auto results = this->launch(
-    [&](std::vector<Channel> channels) -> std::pair<BitString, BitString> {
+    [&](std::vector<Channel> channels) -> BitString {
       EC::Curve curve; // needed to initalize relic on this thread
-      return alice.run(BOB_ID, channels[0], alice_srots, alice_rrots);
+      return alice.run(channels[0], alice_srots, alice_rrots);
     },
-    [&](int _, Channel channel) -> std::pair<BitString, BitString> {
+    [&](int _, Channel channel) -> BitString {
       EC::Curve curve; // needed to initalize relic on this thread
-      return bob.run(ALICE_ID, channel, bob_srots, bob_rrots);
+      return bob.run(channel, bob_srots, bob_rrots);
     }
   );
 
   // 2-party correlation inputs
-  BitString a0, a1, b0, b1;
-  std::tie(a0, b0) = alice.inputs();
-  std::tie(a1, b1) = bob.inputs();
+  BitString a = alice.inputs();
+  BitString b = bob.inputs();
 
   // 2-party correlation outputs
-  BitString c0, c1, d0, d1;
-  std::tie(c0, d0) = results.first;
-  std::tie(c1, d1) = results.second[0];
+  BitString c0 = results.first;
+  BitString c1 = results.second[0];
 
-  ASSERT_EQ(a0 & b1, c0 ^ c1);
-  ASSERT_EQ(b0 & a1, d0 ^ d1);
+  ASSERT_EQ(a & b, c0 ^ c1);
 }
 
 TEST_F(PCGTests, PCGNumOTs) {
@@ -115,12 +111,11 @@ TEST_F(PCGTests, PCGNumOTs) {
     BitString::sample(LAMBDA), 1 << 12, 1 << 7, 1 << 6, 1 << 3,
     BitString::sample(LAMBDA), 4, 7
   );
-  const uint32_t ALICE_ID = 0, BOB_ID = 1;
 
-  Beaver::PCG alice(ALICE_ID, params);
-  Beaver::PCG bob(BOB_ID, params);
+  Beaver::Sender alice(params);
+  Beaver::Receiver bob(params);
 
-  std::pair<size_t, size_t> nOTs = alice.numOTs(BOB_ID);
+  std::pair<size_t, size_t> nOTs = alice.numOTs();
 
   RandomOTSender alice_srots, bob_srots;
   RandomOTReceiver alice_rrots, bob_rrots;
@@ -128,13 +123,13 @@ TEST_F(PCGTests, PCGNumOTs) {
   std::tie(bob_srots, alice_rrots) = this->mockRandomOTs(nOTs.second);
 
   auto results = this->launch(
-    [&](std::vector<Channel> channels) -> std::pair<BitString, BitString> {
+    [&](std::vector<Channel> channels) -> BitString {
       EC::Curve curve; // needed to initalize relic on this thread
-      return alice.run(BOB_ID, channels[0], alice_srots, alice_rrots);
+      return alice.run(channels[0], alice_srots, alice_rrots);
     },
-    [&](int _, Channel channel) -> std::pair<BitString, BitString> {
+    [&](int _, Channel channel) -> BitString {
       EC::Curve curve; // needed to initalize relic on this thread
-      return bob.run(ALICE_ID, channel, bob_srots, bob_rrots);
+      return bob.run(channel, bob_srots, bob_rrots);
     }
   );
 
