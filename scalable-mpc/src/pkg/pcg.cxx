@@ -247,9 +247,7 @@ BitString Sender::finalize() {
   MULTI_TASK([this, &eXs_matrix](size_t start, size_t end) {
     size_t blockSize = params.dual.blockSize();
     for (size_t c = start; c < end; c++) {
-      for (size_t n = 0; n < params.dual.N(); n++) {
-        eXs_matrix[c][n] ^= this->eXs[n / blockSize](n % blockSize)[c];
-      }
+      eXs_matrix[c] = BitString::sample(params.dual.N());
     }
   }, params.primal.k);
   for (PPRF& pprf : this->eXs) { pprf.clear(); }
@@ -325,9 +323,7 @@ BitString Receiver::finalize() {
   MULTI_TASK([this, &eXs_matrix](size_t start, size_t end) {
     size_t blockSize = params.dual.blockSize();
     for (size_t c = start; c < end; c++) {
-      for (size_t n = 0; n < params.dual.N(); n++) {
-        eXs_matrix[c][n] ^= this->eXs[n / blockSize](n % blockSize)[c];
-      }
+      eXs_matrix[c] = BitString::sample(params.dual.N());
     }
   }, params.primal.k);
   for (PPRF& pprf : this->eXs) { pprf.clear(); }
