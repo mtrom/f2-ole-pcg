@@ -131,6 +131,11 @@ public:
   // conver to a byte vector where each bit is expanded to a whole byte
   std::vector<unsigned char> expand();
 
+  void resize(size_t size) {
+    this->size_ = size;
+    bytes.resize((size + 7) / 8);
+  }
+
   // using this as a key, expand to `size` bits using aes
   BitString aes(size_t size);
 

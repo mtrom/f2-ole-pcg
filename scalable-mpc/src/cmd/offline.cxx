@@ -27,8 +27,10 @@ void runSender(const PCGParams& params, const std::string& host) {
   SocketPartyData my_socket(address::from_string("0.0.0.0"), BASE_PORT);
   SocketPartyData their_socket(address::from_string(host), BASE_PORT);
 
-  timer.start("[offline] setup");
   Beaver::Sender pcg(params);
+
+  timer.start("[offline] init");
+  pcg.init();
   timer.stop();
 
   timer.start("[offline] prepare");
@@ -54,16 +56,27 @@ void runSender(const PCGParams& params, const std::string& host) {
   pcg.online(channel, sender, receiver);
   timer.stop();
 
-  float upload = (float) channel->bytesIn / 1000000;
-  float download = (float) channel->bytesOut / 1000000;
+  float upload = (float) channel->bytesIn / (size_t) (1 << 20);
+  float download = (float) channel->bytesOut / (size_t) (1 << 20);
   std::cout << "          upload   = " << upload << "MB" << std::endl;
   std::cout << "          download = " << download << "MB" << std::endl;
   std::cout << "          total    = " << (upload + download) << "MB" << std::endl;
 
   channel.reset();
 
+  // free public matrices for memory purposes
+  pcg.clear();
+
   timer.start("[offline] finalize");
-  BitString output = pcg.finalize();
+  pcg.finalize();
+  timer.stop();
+
+  timer.start("[offline] reinit");
+  pcg.init();
+  timer.stop();
+
+  timer.start("[offline] expand");
+  pcg.expand();
   timer.stop();
 
   std::cout << GREEN << "[offline] done." << RESET << std::endl;
@@ -80,6 +93,10 @@ void runReceiver(const PCGParams& params, const std::string& host) {
   Beaver::Receiver pcg(params);
   timer.stop();
 
+  timer.start("[offline] init");
+  pcg.init();
+  timer.stop();
+
   timer.start("[offline] prepare");
   pcg.prepare();
   timer.stop();
@@ -103,16 +120,27 @@ void runReceiver(const PCGParams& params, const std::string& host) {
   pcg.online(channel, sender, receiver);
   timer.stop();
 
-  float upload = (float) channel->bytesIn / 1000000;
-  float download = (float) channel->bytesOut / 1000000;
+  float upload = (float) channel->bytesIn / (size_t) (1 << 20);
+  float download = (float) channel->bytesOut / (size_t) (1 << 20);
   std::cout << "          upload   = " << upload << "MB" << std::endl;
   std::cout << "          download = " << download << "MB" << std::endl;
   std::cout << "          total    = " << (upload + download) << "MB" << std::endl;
 
   channel.reset();
 
+  // free public matrices for memory purposes
+  pcg.clear();
+
   timer.start("[offline] finalize");
-  BitString output = pcg.finalize();
+  pcg.finalize();
+  timer.stop();
+
+  timer.start("[offline] reinit");
+  pcg.init();
+  timer.stop();
+
+  timer.start("[offline] expand");
+  pcg.expand();
   timer.stop();
 
   std::cout << GREEN << "[offline] done." << RESET << std::endl;
@@ -131,6 +159,7 @@ void runBoth(const PCGParams& params) {
     channel->join(COMM_SLEEP, COMM_TIMEOUT);
 
     Beaver::Sender pcg(params);
+    pcg.init();
 
     timer.start("[offline] ot ext");
     size_t srots, rrots;
@@ -158,11 +187,15 @@ void runBoth(const PCGParams& params) {
     std::cout << "          total    = " << (upload + download) << "MB" << std::endl;
 
     timer.start("[offline] finalize");
-    BitString output = pcg.finalize();
+    pcg.finalize();
+    timer.stop();
+
+    timer.start("[offline] expand");
+    pcg.expand();
     timer.stop();
 
     BitString inputs = pcg.inputs();
-    return std::make_tuple(inputs, output);
+    return std::make_tuple(inputs, pcg.output);
   });
 
   auto bob = std::async(std::launch::async, [asocket, bsocket, params]() {
@@ -171,6 +204,7 @@ void runBoth(const PCGParams& params) {
     channel->join(COMM_SLEEP, COMM_TIMEOUT);
 
     Beaver::Receiver pcg(params);
+    pcg.init();
 
     size_t srots, rrots;
     std::tie(srots, rrots) = pcg.numOTs();

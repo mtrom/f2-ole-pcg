@@ -53,14 +53,14 @@ void sse_trans(uint8_t const *inp, uint8_t *out, int nrows, int ncols) {
     OUT(rr, cc + i) = _mm_movemask_epi8(tmp.x);
 }
 
-std::vector<BitString> transpose(
-  std::vector<BitString*>& input, size_t nrows, size_t ncols
+void transpose(
+  std::vector<BitString*>& input, std::vector<uint8_t*>& output, size_t nrows, size_t ncols
 ) {
   std::vector<uint8_t> inp_bytes(nrows * (ncols / 8));
 
   size_t nbytes = ((ncols + 7) / 8);
   for (int x = 0; x < nrows; x++) {
-    unsigned char* src = input[x]->data();
+    uint8_t* src = input[x]->data();
     std::copy(src, src + nbytes, inp_bytes.begin() + (x * nbytes));
     input[x]->clear();
   }
@@ -69,16 +69,12 @@ std::vector<BitString> transpose(
   sse_trans(inp_bytes.data(), out_bytes.data(), nrows, ncols);
   inp_bytes.clear();
 
-  std::vector<BitString> output(ncols, BitString(nrows));
   nbytes = ((nrows + 7) / 8);
   uint8_t* iter = out_bytes.data();
   for (int i = 0; i < ncols; i++) {
-    unsigned char* dest = output[i].data();
-    std::copy(iter, iter + nbytes, dest);
+    std::copy(iter, iter + nbytes, output[i]);
     iter += nbytes;
   }
-
-  return output;
 }
 
 std::vector<BitString> transpose(std::vector<PPRF>& pprfs, const PCGParams& params) {
@@ -88,7 +84,7 @@ std::vector<BitString> transpose(std::vector<PPRF>& pprfs, const PCGParams& para
 
   // the size of each chunk
   const size_t CHUNK_SIZE = params.dual.N() / (THREAD_COUNT * CHUNKS);
-  std::vector<std::vector<BitString*>> ptrs(THREAD_COUNT * CHUNKS);
+  std::vector<std::vector<BitString*>> in_ptrs(THREAD_COUNT * CHUNKS);
 
   timer.start("[transpose] prepare inputs");
   size_t n = 0;
@@ -96,39 +92,38 @@ std::vector<BitString> transpose(std::vector<PPRF>& pprfs, const PCGParams& para
     auto image = pprf.getImage();
     for (size_t i = 0; i < pprf.domain(); i++) {
       BitString* ptr = &((*image)[i]);
-      ptrs[n / CHUNK_SIZE].push_back(ptr);
+      in_ptrs[n / CHUNK_SIZE].push_back(ptr);
       n++;
       if (n >= params.dual.N()) { break; }
     }
   }
   timer.stop();
 
-  timer.start("[transpose] actual transpose");
-  std::vector<std::vector<BitString>> chunks(THREAD_COUNT * 4);
+  timer.start("[transpose] prepare outputs");
+  std::vector<BitString> output(params.primal.k);
   MULTI_TASK([&](size_t start, size_t end) {
     for (size_t i = start; i < end; i++) {
-      chunks[i] = transpose(ptrs[i], CHUNK_SIZE, params.primal.k);
+      output[i].resize(params.dual.N());
+    }
+  }, params.primal.k);
+  timer.stop();
+
+  timer.start("[transpose] actual transpose");
+  MULTI_TASK([&](size_t start, size_t end) {
+    for (size_t i = start; i < end; i++) {
+      std::vector<uint8_t*> out_ptrs;
+      for (BitString& row : output) {
+        out_ptrs.push_back(row.data() + (i * ((CHUNK_SIZE + 7) / 8)));
+      }
+      transpose(in_ptrs[i], out_ptrs, CHUNK_SIZE, params.primal.k);
+      out_ptrs.clear();
     }
   }, THREAD_COUNT * CHUNKS);
   timer.stop();
 
   // free up processed memory
   timer.start("[transpose] memory clean up");
-  ptrs.clear();
   for (PPRF& pprf : pprfs) { pprf.clear(); }
-  timer.stop();
-
-  timer.start("[transpose] prepare outputs");
-  std::vector<BitString> output(params.primal.k, BitString(params.dual.N()));
-  MULTI_TASK([&](size_t start, size_t end) {
-    for (size_t k = start; k < end; k++) {
-      uint8_t* iter = output[k].data();
-      for (std::vector<BitString>& chunk : chunks) {
-        std::copy(chunk[k].data(), chunk[k].data() + chunk[k].nBytes(), iter);
-        iter += chunk[k].nBytes();
-      }
-    }
-  }, params.primal.k);
   timer.stop();
 
   return output;
