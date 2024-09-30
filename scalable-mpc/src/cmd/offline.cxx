@@ -71,7 +71,9 @@ void runSender(const PCGParams& params, const std::string& host) {
   pcg.finalize();
   timer.stop();
 
+  timer.start("[offline] reinit");
   pcg.init();
+  timer.stop();
 
   timer.start("[offline] expand");
   pcg.expand();
@@ -89,6 +91,10 @@ void runReceiver(const PCGParams& params, const std::string& host) {
 
   timer.start("[offline] setup");
   Beaver::Receiver pcg(params);
+  timer.stop();
+
+  timer.start("[offline] init");
+  pcg.init();
   timer.stop();
 
   timer.start("[offline] prepare");
@@ -129,7 +135,9 @@ void runReceiver(const PCGParams& params, const std::string& host) {
   pcg.finalize();
   timer.stop();
 
+  timer.start("[offline] reinit");
   pcg.init();
+  timer.stop();
 
   timer.start("[offline] expand");
   pcg.expand();
