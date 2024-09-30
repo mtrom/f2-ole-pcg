@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <iostream>
 
 #include "util/bitstring.hpp"
 #include "util/params.hpp"

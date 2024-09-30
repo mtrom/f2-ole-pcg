@@ -156,11 +156,11 @@ DualMatrix::DualMatrix(const BitString& key, const DualParams& params)
 {
   PRF<BitString> prf(key);
 
-  MULTI_TASK([this, &prf, &params](size_t start, size_t end) {
+  MULTI_TASK([this, &prf](size_t start, size_t end) {
     for (size_t i = start; i < end; i++) {
       (*this->rows)[i] = prf(i, this->width);
     }
-  }, params.n);
+  }, this->rows->size());
 }
 
 DualMatrix DualMatrix::sample(const DualParams& params) {
@@ -178,12 +178,8 @@ BitString MatrixProduct::operator[](size_t idx) const {
 
   BitString row(this->dim().second);
 
-  for (size_t col = 0; col < row.size(); col++) {
-    bool element = false;
-    for (uint32_t point : sparse.getNonZeroElements(idx)) {
-      if (dense[{point, col}]) { element = !element; }
-    }
-    row[col] = element;
+  for (uint32_t point : sparse.getNonZeroElements(idx)) {
+    row ^= dense[point];
   }
   return row;
 }
