@@ -29,19 +29,10 @@ void runSender(const PCGParams& params, const std::string& host) {
 
   Beaver::Sender pcg(params);
 
-  timer.start("[offline] init");
-  pcg.init();
-  timer.stop();
-
-  timer.start("[offline] prepare");
-  pcg.prepare();
-  timer.stop();
-
   boost::asio::io_service ios;
   Channel channel = std::make_shared<CommPartyTCPSynced>(ios, my_socket, their_socket);
   channel->join(COMM_SLEEP, COMM_TIMEOUT);
 
-  timer.start("[offline] online");
   Timer subtimer("[online] ot ext");
   size_t srots, rrots;
   std::tie(srots, rrots) = pcg.numOTs();
@@ -53,31 +44,11 @@ void runSender(const PCGParams& params, const std::string& host) {
   receiver.run(rrots, channel, host, BASE_PORT + 2);
   subtimer.stop();
 
-  pcg.online(channel, sender, receiver);
-  timer.stop();
-
   float upload = (float) channel->bytesIn / (size_t) (1 << 20);
   float download = (float) channel->bytesOut / (size_t) (1 << 20);
   std::cout << "          upload   = " << upload << "MB" << std::endl;
   std::cout << "          download = " << download << "MB" << std::endl;
   std::cout << "          total    = " << (upload + download) << "MB" << std::endl;
-
-  channel.reset();
-
-  // free public matrices for memory purposes
-  pcg.clear();
-
-  timer.start("[offline] finalize");
-  pcg.finalize();
-  timer.stop();
-
-  timer.start("[offline] reinit");
-  pcg.init();
-  timer.stop();
-
-  timer.start("[offline] expand");
-  pcg.expand();
-  timer.stop();
 
   std::cout << GREEN << "[offline] done." << RESET << std::endl;
 }
@@ -89,23 +60,12 @@ void runReceiver(const PCGParams& params, const std::string& host) {
   SocketPartyData my_socket(address::from_string("0.0.0.0"), BASE_PORT);
   SocketPartyData their_socket(address::from_string(host), BASE_PORT);
 
-  timer.start("[offline] setup");
   Beaver::Receiver pcg(params);
-  timer.stop();
-
-  timer.start("[offline] init");
-  pcg.init();
-  timer.stop();
-
-  timer.start("[offline] prepare");
-  pcg.prepare();
-  timer.stop();
 
   boost::asio::io_service ios;
   Channel channel = std::make_shared<CommPartyTCPSynced>(ios, my_socket, their_socket);
   channel->join(COMM_SLEEP, COMM_TIMEOUT);
 
-  timer.start("[offline] online");
   Timer subtimer("[online] ot ext");
   size_t srots, rrots;
   std::tie(srots, rrots) = pcg.numOTs();
@@ -117,31 +77,11 @@ void runReceiver(const PCGParams& params, const std::string& host) {
   sender.run(srots, channel, BASE_PORT + 2);
   subtimer.stop();
 
-  pcg.online(channel, sender, receiver);
-  timer.stop();
-
   float upload = (float) channel->bytesIn / (size_t) (1 << 20);
   float download = (float) channel->bytesOut / (size_t) (1 << 20);
   std::cout << "          upload   = " << upload << "MB" << std::endl;
   std::cout << "          download = " << download << "MB" << std::endl;
   std::cout << "          total    = " << (upload + download) << "MB" << std::endl;
-
-  channel.reset();
-
-  // free public matrices for memory purposes
-  pcg.clear();
-
-  timer.start("[offline] finalize");
-  pcg.finalize();
-  timer.stop();
-
-  timer.start("[offline] reinit");
-  pcg.init();
-  timer.stop();
-
-  timer.start("[offline] expand");
-  pcg.expand();
-  timer.stop();
 
   std::cout << GREEN << "[offline] done." << RESET << std::endl;
 }
