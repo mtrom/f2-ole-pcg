@@ -100,7 +100,12 @@ std::vector<BitString> transpose(std::vector<PPRF>& pprfs, const PCGParams& para
   timer.stop();
 
   timer.start("[transpose] prepare outputs");
-  std::vector<BitString> output(params.primal.k, BitString(params.dual.N()));
+  std::vector<BitString> output(params.primal.k);
+  MULTI_TASK([&](size_t start, size_t end) {
+    for (size_t i = start; i < end; i++) {
+      output[i].resize(params.dual.N());
+    }
+  }, params.primal.k);
   timer.stop();
 
   timer.start("[transpose] actual transpose");

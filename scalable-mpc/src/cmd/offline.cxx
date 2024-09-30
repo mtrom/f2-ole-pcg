@@ -56,8 +56,8 @@ void runSender(const PCGParams& params, const std::string& host) {
   pcg.online(channel, sender, receiver);
   timer.stop();
 
-  float upload = (float) channel->bytesIn / 1000000;
-  float download = (float) channel->bytesOut / 1000000;
+  float upload = (float) channel->bytesIn / (size_t) (1 << 20);
+  float download = (float) channel->bytesOut / (size_t) (1 << 20);
   std::cout << "          upload   = " << upload << "MB" << std::endl;
   std::cout << "          download = " << download << "MB" << std::endl;
   std::cout << "          total    = " << (upload + download) << "MB" << std::endl;

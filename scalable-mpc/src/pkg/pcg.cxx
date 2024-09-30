@@ -256,7 +256,7 @@ void Sender::finalize() {
 
     this->output += image;
   }
-  if (this->output.size() != params.size) { this->output.truncate(params.size); }
+  if (this->output.size() != params.size) { this->output.resize(params.size); }
   timer.stop();
 
   // free up used memory
@@ -300,7 +300,7 @@ void Receiver::finalize() {
 
     this->output += image;
   }
-  if (this->output.size() != params.size) { this->output.truncate(params.size); }
+  if (this->output.size() != params.size) { this->output.resize(params.size); }
   timer.stop();
 
   timer.start("[finalize] clear memory");

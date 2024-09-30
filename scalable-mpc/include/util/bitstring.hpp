@@ -131,11 +131,7 @@ public:
   // conver to a byte vector where each bit is expanded to a whole byte
   std::vector<unsigned char> expand();
 
-  // reduce
-  void truncate(size_t size) {
-    if (size > this->size_) {
-      throw std::out_of_range("[BitString::trunacte] new size must be smaller");
-    }
+  void resize(size_t size) {
     this->size_ = size;
     bytes.resize((size + 7) / 8);
   }
