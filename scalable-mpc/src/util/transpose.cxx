@@ -85,7 +85,6 @@ std::vector<BitString> transpose(std::vector<PPRF>& pprfs, const PCGParams& para
   // the size of each chunk
   const size_t CHUNK_SIZE = params.dual.N() / (THREAD_COUNT * CHUNKS);
   std::vector<std::vector<BitString*>> in_ptrs(THREAD_COUNT * CHUNKS);
-  std::vector<std::vector<uint8_t*>> out_ptrs(THREAD_COUNT * CHUNKS);
 
   timer.start("[transpose] prepare inputs");
   size_t n = 0;
@@ -102,19 +101,17 @@ std::vector<BitString> transpose(std::vector<PPRF>& pprfs, const PCGParams& para
 
   timer.start("[transpose] prepare outputs");
   std::vector<BitString> output(params.primal.k, BitString(params.dual.N()));
-  n = 0;
-  for (BitString& row : output) {
-    uint8_t* iter = row.data();
-    for (size_t i = 0; i < THREAD_COUNT * CHUNKS; i++, iter += ((CHUNK_SIZE + 7) / 8)) {
-      out_ptrs[i].push_back(iter);
-    }
-  }
   timer.stop();
 
   timer.start("[transpose] actual transpose");
   MULTI_TASK([&](size_t start, size_t end) {
     for (size_t i = start; i < end; i++) {
-      transpose(in_ptrs[i], out_ptrs[i], CHUNK_SIZE, params.primal.k);
+      std::vector<uint8_t*> out_ptrs;
+      for (BitString& row : output) {
+        out_ptrs.push_back(row.data() + (i * ((CHUNK_SIZE + 7) / 8)));
+      }
+      transpose(in_ptrs[i], out_ptrs, CHUNK_SIZE, params.primal.k);
+      out_ptrs.clear();
     }
   }, THREAD_COUNT * CHUNKS);
   timer.stop();
