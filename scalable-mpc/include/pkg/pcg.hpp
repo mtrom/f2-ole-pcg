@@ -24,19 +24,29 @@ public:
 
   // run entire protocol
   BitString run(Channel channel, RandomOTSender srots, RandomOTReceiver rrots) {
+    init();
     prepare();
     online(channel, srots, rrots);
-    return finalize();
+    finalize();
+    expand();
+    return output;
   };
+
+  // initialize / clear public information
+  void init();
+  void clear() { A = LPN::PrimalMatrix(); H = LPN::DualMatrix(); B = LPN::MatrixProduct(); };
 
   // non-interactive steps to prepare for the protocol
   virtual void prepare() = 0;
 
   // interactive steps during the protocol
-  virtual void online(Channel channel, RandomOTSender srots, RandomOTReceiver rrots) = 0 ;
+  virtual void online(Channel channel, RandomOTSender srots, RandomOTReceiver rrots) = 0;
 
-  // non-interactive steps after online to finalize the output correlations
-  virtual BitString finalize() = 0;
+  // non-interactive steps after online to prepare to output correlations
+  virtual void finalize() = 0;
+
+  // generate the actual correlations
+  void expand();
 
   // return the programmed inputs
   BitString inputs() const;
@@ -44,6 +54,8 @@ public:
   // required number of oblivious transfers for one protocol run based on `params`
   virtual std::pair<size_t, size_t> numOTs() const = 0;
 
+  // output correlations
+  BitString output;
 protected:
   std::vector<AHE::Ciphertext> homomorphicInnerProduct(
     const std::vector<AHE::Ciphertext>& enc_s
@@ -70,6 +82,9 @@ protected:
   // protocol pprfs
   std::vector<PPRF> eXs;
   std::vector<DPF> eXas_eoe, eXas;
+
+  // transpose of (ε ⊗ s) matrix
+  std::vector<BitString> eXs_matrix;
 };
 
 class Sender : public PCG {
@@ -77,7 +92,7 @@ public:
   Sender(const PCGParams& params) : PCG(params) { }
   void prepare() override;
   void online(Channel channel, RandomOTSender srots, RandomOTReceiver rrots) override;
-  BitString finalize() override;
+  void finalize() override;
   std::pair<size_t, size_t> numOTs() const override;
 };
 
@@ -86,7 +101,7 @@ public:
   Receiver(const PCGParams& params) : PCG(params) { }
   void prepare() override;
   void online(Channel channel, RandomOTSender srots, RandomOTReceiver rrots) override;
-  BitString finalize() override;
+  void finalize() override;
   std::pair<size_t, size_t> numOTs() const override;
 
 protected:

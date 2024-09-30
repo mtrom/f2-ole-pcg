@@ -28,6 +28,14 @@ namespace Beaver {
 // PCG PROTOCOL METHODS
 ////////////////////////////////////////////////////////////////////////////////
 
+void PCG::init() {
+  Timer timer("[prepare] sample public matrices");
+  this->A = LPN::PrimalMatrix(params.pkey, params.primal);
+  this->H = LPN::DualMatrix(params.dkey, params.dual);
+  this->B = LPN::MatrixProduct(A, H);
+  timer.stop();
+}
+
 void Sender::prepare() {
   Timer timer;
 
@@ -41,15 +49,6 @@ void Sender::prepare() {
   timer.start("[prepare] sample (⟨aᵢ,s₀⟩ · e₁) ⊕ (e₀ ○ e₁)  pprfs");
   this->eXas_eoe = DPF::sample(params.primal.t, LAMBDA, params.primal.blockSize());
   timer.stop();
-
-  // sample public matrices
-  timer.start("[prepare] sample primal matrix");
-  this->A = LPN::PrimalMatrix(params.pkey, params.primal);
-  timer.stop();
-  timer.start("[prepare] sample dual matrix");
-  this->H = LPN::DualMatrix(params.dkey, params.dual);
-  timer.stop();
-  this->B = LPN::MatrixProduct(A, H);
 
   // sample primal error vectors
   timer.start("[prepare] sample primal error");
@@ -78,15 +77,6 @@ void Receiver::prepare() {
   timer.start("[prepare] sample (⟨aᵢ,s₀⟩ · e₁) pprfs");
   this->eXas = DPF::sample(params.primal.t, LAMBDA, params.primal.blockSize());
   timer.stop();
-
-  // sample public matrices
-  timer.start("[prepare] sample primal matrix");
-  this->A = LPN::PrimalMatrix(params.pkey, params.primal);
-  timer.stop();
-  timer.start("[prepare] sample dual matrix");
-  this->H = LPN::DualMatrix(params.dkey, params.dual);
-  timer.stop();
-  this->B = LPN::MatrixProduct(A, H);
 
   // sample primal error vectors
   timer.start("[prepare] sample primal error");
@@ -239,12 +229,12 @@ void Receiver::online(Channel channel, RandomOTSender srots, RandomOTReceiver rr
   REPORT_COMMS();
 }
 
-BitString Sender::finalize() {
+void Sender::finalize() {
   Timer timer;
 
   // arrange our shares of the ε ⊗ s matrix by column
   timer.start("[finalize] transpose (ε ⊗ s) matrix");
-  std::vector<BitString> eXs_matrix = transpose(this->eXs, params);
+  this->eXs_matrix = transpose(this->eXs, params);
   timer.stop();
 
   // expand only the other pprfs that are needed
@@ -253,21 +243,20 @@ BitString Sender::finalize() {
     for (size_t i = start; i < end; i++) {
       this->eXas[i].expand();
     }
-  }, params.blocks());
+  }, params.primal.t);
   timer.stop();
 
   // concatenate the image for each error block to get final output
   timer.start("[finalize] concat images");
-  BitString out;
-  for (size_t i = 0; i < params.blocks(); i++) {
+  for (size_t i = 0; i < params.primal.t; i++) {
     BitString image = this->eXas_eoe[i].image() ^ this->eXas[i].image();
 
     // at our error position, xor with our shares of (e₀ ○ e₁)
     image[this->e[i]] ^= this->masks[i];
 
-    out += image;
+    this->output += image;
   }
-  if (out.size() != params.size) { out = out[{0, params.size}]; }
+  if (this->output.size() != params.size) { this->output.truncate(params.size); }
   timer.stop();
 
   // free up used memory
@@ -275,32 +264,9 @@ BitString Sender::finalize() {
   for (DPF& dpf : this->eXas_eoe) { dpf.clear(); }
   for (DPF& dpf : this->eXas)     { dpf.clear(); }
   timer.stop();
-
-  // compute shares of the ⟨bᵢ⊗ aᵢ,ε ⊗ s⟩ vector
-  timer.start("[finalize] compute last term");
-  auto baex = TASK_REDUCE<BitString>([this, &eXs_matrix](size_t start, size_t end) {
-    BitString out(end - start);
-    for (size_t i = start; i < end; i++) {
-      BitString aXeXs(params.dual.N());
-      for (uint32_t idx : this->A.getNonZeroElements(i)) {
-        aXeXs ^= eXs_matrix[idx];
-      }
-      out[i - start] = this->B[i] * aXeXs;
-    }
-    return out;
-  }, [](std::vector<BitString> results) {
-    BitString out;
-    for (const BitString& result : results) {
-      out += result;
-    }
-    return out;
-  }, params.size);
-  timer.stop();
-
-  return out ^ baex;
 }
 
-BitString Receiver::finalize() {
+void Receiver::finalize() {
   Timer timer;
 
   timer.start("[finalize] expand (ε ⊗ s) pprfs");
@@ -313,7 +279,7 @@ BitString Receiver::finalize() {
 
   // arrange our shares of the ε ⊗ s matrix by column
   timer.start("[finalize] transpose (ε ⊗ s) matrix");
-  std::vector<BitString> eXs_matrix = transpose(this->eXs, params);
+  this->eXs_matrix = transpose(this->eXs, params);
   timer.stop();
 
   timer.start("[finalize] expand (⟨aᵢ,s⟩ · e) ⊕ (e₀ ○ e₁) pprfs");
@@ -321,36 +287,37 @@ BitString Receiver::finalize() {
     for (size_t i = start; i < end; i++) {
       this->eXas_eoe[i].expand();
     }
-  }, params.blocks());
+  }, params.primal.t);
   timer.stop();
 
   // in each direction, concatenate the image for each error block to get final output
   timer.start("[finalize] concat images");
-  BitString out;
   for (size_t i = 0; i < params.blocks(); i++) {
     BitString image = this->eXas_eoe[i].image() ^ this->eXas[i].image();
 
     // at our error position, xor with our shares of (e₀ ○ e₁)
     image[this->e[i]] ^= this->masks[i] ^ this->eoe[i];
 
-    out += image;
+    this->output += image;
   }
-  if (out.size() != params.size) { out = out[{0, params.size}]; }
+  if (this->output.size() != params.size) { this->output.truncate(params.size); }
   timer.stop();
 
   timer.start("[finalize] clear memory");
   for (DPF& dpf : this->eXas_eoe) { dpf.clear(); }
   for (DPF& dpf : this->eXas)     { dpf.clear(); }
   timer.stop();
+}
 
+void PCG::expand() {
   // compute shares of the ⟨bᵢ⊗ aᵢ,ε ⊗ s⟩ vector
-  timer.start("[finalize] compute last term");
-  auto baex = TASK_REDUCE<BitString>([this, &eXs_matrix](size_t start, size_t end) {
+  Timer timer("[finalize] compute last term");
+  auto baex = TASK_REDUCE<BitString>([this](size_t start, size_t end) {
     BitString out(end - start);
     for (size_t i = start; i < end; i++) {
       BitString aXeXs(params.dual.N());
       for (uint32_t idx : this->A.getNonZeroElements(i)) {
-        aXeXs ^= eXs_matrix[idx];
+        aXeXs ^= this->eXs_matrix[idx];
       }
       out[i - start] = this->B[i] * aXeXs;
     }
@@ -362,10 +329,11 @@ BitString Receiver::finalize() {
     }
     return out;
   }, params.size);
-  timer.stop();
 
-  return out ^ baex;
+  this->output ^= baex;
+  timer.stop();
 }
+
 
 std::vector<AHE::Ciphertext> PCG::homomorphicInnerProduct(
   const std::vector<AHE::Ciphertext>& enc_s
