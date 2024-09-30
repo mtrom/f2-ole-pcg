@@ -4,6 +4,7 @@
 
 #include <boost/asio.hpp>
 #include <boost/program_options.hpp>
+#include <libscapi/lib/OTExtensionBristol/Networking/sockets.h>
 
 #include "pkg/pcg.hpp"
 #include "pkg/rot.hpp"
@@ -19,6 +20,7 @@
 
 using address = boost::asio::ip::address;
 namespace options = boost::program_options;
+extern unsigned long long sent_amount;
 
 void runSender(const PCGParams& params, const std::string& host) {
   std::cout << params.toString() << std::endl;
@@ -44,11 +46,7 @@ void runSender(const PCGParams& params, const std::string& host) {
   receiver.run(rrots, channel, host, BASE_PORT + 2);
   subtimer.stop();
 
-  float upload = (float) channel->bytesIn / (size_t) (1 << 20);
-  float download = (float) channel->bytesOut / (size_t) (1 << 20);
-  std::cout << "          upload   = " << upload << "MB" << std::endl;
-  std::cout << "          download = " << download << "MB" << std::endl;
-  std::cout << "          total    = " << (upload + download) << "MB" << std::endl;
+  std::cout << "          upload   = " << sent_amount << "MB" << std::endl;
 
   std::cout << GREEN << "[offline] done." << RESET << std::endl;
 }
@@ -77,11 +75,7 @@ void runReceiver(const PCGParams& params, const std::string& host) {
   sender.run(srots, channel, BASE_PORT + 2);
   subtimer.stop();
 
-  float upload = (float) channel->bytesIn / (size_t) (1 << 20);
-  float download = (float) channel->bytesOut / (size_t) (1 << 20);
-  std::cout << "          upload   = " << upload << "MB" << std::endl;
-  std::cout << "          download = " << download << "MB" << std::endl;
-  std::cout << "          total    = " << (upload + download) << "MB" << std::endl;
+  std::cout << "          upload   = " << sent_amount << "MB" << std::endl;
 
   std::cout << GREEN << "[offline] done." << RESET << std::endl;
 }
