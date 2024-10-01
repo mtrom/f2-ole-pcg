@@ -15,4 +15,4 @@ rm log4cpp-1.1.4.tar.gz
 (cd relic/; cmake -DMULTI=PTHREAD . && make && sudo make install)
 
 # build project
-(cd scalable-mpc/build; cmake .. && make)
+(cd primal-dual-pcg/build; cmake .. && make)

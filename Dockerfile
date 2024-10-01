@@ -105,16 +105,16 @@ RUN apt-get -y install \
 # remove unneeded .deb files
 RUN rm -r /var/lib/apt/lists/*
 
-# set up passwordless sudo for user mpc-user
-RUN useradd -m -s /bin/bash mpc-user &&  \
-  echo "mpc-user ALL=(ALL:ALL) NOPASSWD: ALL" > /etc/sudoers.d/mpc-init
+# set up passwordless sudo for user pcg-user
+RUN useradd -m -s /bin/bash pcg-user &&  \
+  echo "pcg-user ALL=(ALL:ALL) NOPASSWD: ALL" > /etc/sudoers.d/pcg-init
 
 # git build arguments
-ARG USER=MPC\ User
+ARG USER=PCG\ User
 ARG EMAIL=nobody@example.com
 
 # configure your environment
-USER mpc-user
+USER pcg-user
 RUN rm -f ~/.bash_logout
-WORKDIR /home/mpc-user
+WORKDIR /home/pcg-user
 CMD ["/bin/bash", "-l"]
