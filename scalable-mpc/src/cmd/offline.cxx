@@ -71,14 +71,6 @@ void runSender(const PCGParams& params, const std::string& host) {
   pcg.finalize();
   timer.stop();
 
-  timer.start("[offline] reinit");
-  pcg.init();
-  timer.stop();
-
-  timer.start("[offline] expand");
-  pcg.expand();
-  timer.stop();
-
   std::cout << GREEN << "[offline] done." << RESET << std::endl;
 }
 
@@ -133,14 +125,6 @@ void runReceiver(const PCGParams& params, const std::string& host) {
 
   timer.start("[offline] finalize");
   pcg.finalize();
-  timer.stop();
-
-  timer.start("[offline] reinit");
-  pcg.init();
-  timer.stop();
-
-  timer.start("[offline] expand");
-  pcg.expand();
   timer.stop();
 
   std::cout << GREEN << "[offline] done." << RESET << std::endl;
