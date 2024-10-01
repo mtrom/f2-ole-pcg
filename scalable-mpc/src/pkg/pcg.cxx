@@ -39,6 +39,9 @@ void PCG::init() {
 void Sender::prepare() {
   Timer timer;
 
+  this->H = LPN::DualMatrix();
+  this->B = LPN::MatrixProduct();
+
   // initialize the pprfs that we are sending
   timer.start("[prepare] sample (ε ⊗ s) pprfs");
   this->eXs = PPRF::sample(
