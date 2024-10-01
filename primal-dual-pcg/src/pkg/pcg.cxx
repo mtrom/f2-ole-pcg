@@ -9,18 +9,7 @@
 #include "pkg/pprf.hpp"
 #include "util/concurrency.hpp"
 #include "util/defines.hpp"
-#include "util/timer.hpp"
 #include "util/transpose.hpp"
-
-#define REPORT_COMMS() \
-  std::cout << "         upload   = " << channel->bytesIn - upload << " B" << std::endl;    \
-  std::cout << "         download = " << channel->bytesOut - download << " B" << std::endl; \
-  std::cout << "         total    = ";                                                      \
-  std::cout << (channel->bytesIn + channel->bytesOut) - (upload + download);                \
-  std::cout << " B" << std::endl;                                                           \
-  upload = channel->bytesIn;                                                                \
-  download = channel->bytesOut;
-
 
 namespace PCG {
 
@@ -29,67 +18,44 @@ namespace PCG {
 ////////////////////////////////////////////////////////////////////////////////
 
 void Base::init() {
-  Timer timer("[prepare] sample public matrices");
   this->A = LPN::PrimalMatrix(params.pkey, params.primal);
   this->H = LPN::DualMatrix(params.dkey, params.dual);
   this->B = LPN::MatrixProduct(A, H);
-  timer.stop();
 }
 
 void Sender::prepare() {
-  Timer timer;
 
   // initialize the pprfs that we are sending
-  timer.start("[prepare] sample (ε ⊗ s) pprfs");
   this->eXs = PPRF::sample(
     params.dual.t, LAMBDA, params.primal.k, params.dual.blockSize()
   );
-  timer.stop();
-
-  timer.start("[prepare] sample (⟨aᵢ,s₀⟩ · e₁) ⊕ (e₀ ○ e₁)  pprfs");
-  this->eXas_eoe = DPF::sample(params.primal.t, LAMBDA, params.primal.blockSize());
-  timer.stop();
+  this->eXas_eoe = BitPPRF::sample(params.primal.t, LAMBDA, params.primal.blockSize());
 
   // sample primal error vectors
-  timer.start("[prepare] sample primal error");
   this->e = sampleVector(params.primal.t, params.primal.blockSize());
-  timer.stop();
 
   // sample primal secret vector
-  timer.start("[prepare] sample secret vector");
   this->s = BitString::sample(params.primal.k);
-  timer.stop();
 
-  // encrypt secret vectors
-  timer.start("[prepare] encrypt secret vectors");
+  // encrypt secret vector
   this->enc_s = this->ahe.encrypt(this->s);
-  timer.stop();
 
   // masks for (⟨aᵢ,s₁⟩ · e₀) and (⟨aᵢ,s₀⟩ · e₁) ⊕ (e₀ ○ e₁) terms
-  timer.start("[prepare] sample masks");
   this->masks = BitString::sample(this->params.primal.t);
-  timer.stop();
 }
 
 void Receiver::prepare() {
-  Timer timer;
 
-  timer.start("[prepare] sample (⟨aᵢ,s₀⟩ · e₁) pprfs");
-  this->eXas = DPF::sample(params.primal.t, LAMBDA, params.primal.blockSize());
-  timer.stop();
+  // initialize the pprfs that we are sending
+  this->eXas = BitPPRF::sample(params.primal.t, LAMBDA, params.primal.blockSize());
 
   // sample primal error vectors
-  timer.start("[prepare] sample primal error");
   this->e = sampleVector(params.primal.t, params.primal.blockSize());
-  timer.stop();
 
   // sample dual error vector
-  timer.start("[prepare] sample dual error");
   this->epsilon = sampleVector(params.dual.t, params.dual.blockSize());
-  timer.stop();
 
   // compute secret vector based on the dual matrix H and error ε
-  timer.start("[prepare] compute other secret vector");
   this->s = BitString(params.primal.k);
   for (size_t i = 0; i < params.primal.k; i++) {
     for (size_t j = 0 ; j < params.dual.t; j++) {
@@ -98,156 +64,96 @@ void Receiver::prepare() {
       }
     }
   }
-  timer.stop();
 
-  // encrypt secret vectors
-  timer.start("[prepare] encrypt secret vectors");
+  // encrypt secret vector
   this->enc_s = this->ahe.encrypt(this->s);
-  timer.stop();
 
   // masks for (⟨aᵢ,s₁⟩ · e₀) and (⟨aᵢ,s₀⟩ · e₁) ⊕ (e₀ ○ e₁) terms
-  timer.start("[prepare] sample masks");
   this->masks = BitString::sample(this->params.primal.t);
-  timer.stop();
 }
 
-void Sender::online(Channel channel, RandomOTSender srots, RandomOTReceiver rrots) {
-  Timer timer;
-
-  float upload = channel->bytesIn;
-  float download = channel->bytesOut;
+void Sender::online(Channel channel, ROT::Sender srots, ROT::Receiver rrots) {
 
   // equality test for (e₀ ○ e₁) terms
-  timer.start("[online] equality testing");
   BitString eoe = EqTestSender(
     params.primal.errorBits(), params.eqTestThreshold, params.primal.t, channel, srots
   ).run(this->e);
-  timer.stop();
-  REPORT_COMMS();
 
   // exchange encrypted secret vectors Enc(s₀) and Enc(s₁)
-  timer.start("[online] send ciphertexts");
   this->ahe.send(this->enc_s, channel, true);
   this->enc_s.clear();
   std::vector<AHE::Ciphertext> other_enc_s = this->ahe.receive(
     this->params.primal.k, channel, true
   );
-  timer.stop();
-  REPORT_COMMS();
 
-  // homomorphically compute Enc(⟨aᵢ,s⟩)
-  timer.start("[online] inner product");
+  // homomorphically compute Enc(⟨aᵢ,s₁⟩)
   std::vector<AHE::Ciphertext> enc_eXas = homomorphicInnerProduct(other_enc_s);
   other_enc_s.clear();
-  timer.stop();
 
   // swap Enc(⟨aᵢ,s₀⟩) and Enc(⟨aᵢ,s₁⟩)
-  timer.start("[online] send ciphertexts back");
   this->ahe.send(enc_eXas, channel);
   std::vector<AHE::Ciphertext> resp = this->ahe.receive(this->params.primal.t, channel);
-  timer.stop();
-  REPORT_COMMS();
 
-  timer.start("[online] decrypt response");
   BitString decrypted_resp = this->ahe.decrypt(resp);
   resp.clear();
-  timer.stop();
 
-  // exchange dpfs for both terms
-  timer.start("[online] exchange (⟨aᵢ,s⟩ · e) pprfs");
-  DPF::send(this->eXas_eoe, decrypted_resp ^ eoe, channel, srots);
-  this->eXas = DPF::receive(
+  // exchange all pprfs
+  BitPPRF::send(this->eXas_eoe, decrypted_resp ^ eoe, channel, srots);
+  this->eXas = BitPPRF::receive(
     this->e, LAMBDA, params.primal.blockSize(), channel, rrots
   );
-  decrypted_resp.clear();
-  timer.stop();
-  REPORT_COMMS();
-
-  timer.start("[online] send (ε ⊗ s) pprf");
   PPRF::send(this->eXs, this->s, channel, srots);
-  timer.stop();
-  REPORT_COMMS();
 }
 
-void Receiver::online(Channel channel, RandomOTSender srots, RandomOTReceiver rrots) {
-  Timer timer;
-
-  float upload = channel->bytesIn;
-  float download = channel->bytesOut;
+void Receiver::online(Channel channel, ROT::Sender srots, ROT::Receiver rrots) {
 
   // equality test for (e₀ ○ e₁) terms
-  timer.start("[online] equality testing");
   this->eoe = EqTestReceiver(
     params.primal.errorBits(), params.eqTestThreshold, params.primal.t, channel, rrots
   ).run(this->e);
-  timer.stop();
-  REPORT_COMMS();
 
   // exchange encrypted secret vectors Enc(s₀) and Enc(s₁)
-  timer.start("[online] send ciphertexts");
   std::vector<AHE::Ciphertext> other_enc_s = this->ahe.receive(
     this->params.primal.k, channel, true
   );
   this->ahe.send(this->enc_s, channel, true);
   this->enc_s.clear();
-  timer.stop();
-  REPORT_COMMS();
 
-  // homomorphically compute Enc(⟨aᵢ,s⟩)
-  timer.start("[online] inner product");
+  // homomorphically compute Enc(⟨aᵢ,s₀⟩)
   std::vector<AHE::Ciphertext> enc_eXas = homomorphicInnerProduct(other_enc_s);
   other_enc_s.clear();
-  timer.stop();
 
   // swap Enc(⟨aᵢ,s₀⟩) and Enc(⟨aᵢ,s₁⟩)
-  timer.start("[online] send ciphertexts back");
   std::vector<AHE::Ciphertext> resp = this->ahe.receive(this->params.primal.t, channel);
   this->ahe.send(enc_eXas, channel);
-  timer.stop();
-  REPORT_COMMS();
 
-  timer.start("[online] decrypt response");
   BitString decrypted_resp = this->ahe.decrypt(resp);
   resp.clear();
-  timer.stop();
 
-  // exchange dpfs for both terms
-  timer.start("[online] exchange (⟨aᵢ,s⟩ · e) pprfs");
-  this->eXas_eoe = DPF::receive(
+  // exchange pprfs
+  this->eXas_eoe = BitPPRF::receive(
     this->e, LAMBDA, params.primal.blockSize(), channel, rrots
   );
-  DPF::send(this->eXas, decrypted_resp, channel, srots);
-  decrypted_resp.clear();
-  timer.stop();
-  REPORT_COMMS();
-
-  timer.start("[online] receive (ε ⊗ s) pprf");
+  BitPPRF::send(this->eXas, decrypted_resp, channel, srots);
   this->eXs = PPRF::receive(
     this->epsilon, LAMBDA, params.primal.k, params.dual.blockSize(), channel, rrots
   );
-  timer.stop();
-  REPORT_COMMS();
 }
 
 void Sender::finalize() {
-  Timer timer;
 
-  // arrange our shares of the ε ⊗ s matrix by column
-  timer.start("[finalize] transpose (ε ⊗ s) matrix");
+  // arrange our shares of the (ε ⊗ s) matrix by column
   this->eXs_matrix = transpose(this->eXs, params);
-  timer.stop();
 
-  // expand only the other pprfs that are needed
-  timer.start("[finalize] expand (⟨aᵢ,s⟩ · e) pprfs");
+  // expand the pprf that was received
   MULTI_TASK([this](size_t start, size_t end) {
     for (size_t i = start; i < end; i++) {
       this->eXas[i].expand();
     }
   }, params.primal.t);
-  timer.stop();
 
   // concatenate the image for each error block to get final output
-  timer.start("[finalize] concat images");
+  this->output.clear();
   for (size_t i = 0; i < params.primal.t; i++) {
     BitString image = this->eXas_eoe[i].image() ^ this->eXas[i].image();
 
@@ -257,41 +163,33 @@ void Sender::finalize() {
     this->output += image;
   }
   if (this->output.size() != params.size) { this->output.resize(params.size); }
-  timer.stop();
 
-  // free up used memory
-  timer.start("[finalize] clear memory");
-  for (DPF& dpf : this->eXas_eoe) { dpf.clear(); }
-  for (DPF& dpf : this->eXas)     { dpf.clear(); }
-  timer.stop();
+  // free up memory
+  for (BitPPRF& pprf : this->eXas_eoe) { pprf.clear(); }
+  for (BitPPRF& pprf : this->eXas)     { pprf.clear(); }
 }
 
 void Receiver::finalize() {
-  Timer timer;
 
-  timer.start("[finalize] expand (ε ⊗ s) pprfs");
+  // expand the (ε ⊗ s) pprf
   MULTI_TASK([this](size_t start, size_t end) {
     for (size_t i = start; i < end; i++) {
       this->eXs[i].expand();
     }
   }, this->eXs.size());
-  timer.stop();
 
-  // arrange our shares of the ε ⊗ s matrix by column
-  timer.start("[finalize] transpose (ε ⊗ s) matrix");
+  // arrange our shares of the (ε ⊗ s) matrix by column
   this->eXs_matrix = transpose(this->eXs, params);
-  timer.stop();
 
-  timer.start("[finalize] expand (⟨aᵢ,s⟩ · e) ⊕ (e₀ ○ e₁) pprfs");
+  // expand the (⟨aᵢ,s₀⟩ · e₁) ⊕ (e₀ ○ e₁) pprf
   MULTI_TASK([this](size_t start, size_t end) {
     for (size_t i = start; i < end; i++) {
       this->eXas_eoe[i].expand();
     }
   }, params.primal.t);
-  timer.stop();
 
   // in each direction, concatenate the image for each error block to get final output
-  timer.start("[finalize] concat images");
+  this->output.clear();
   for (size_t i = 0; i < params.blocks(); i++) {
     BitString image = this->eXas_eoe[i].image() ^ this->eXas[i].image();
 
@@ -301,17 +199,14 @@ void Receiver::finalize() {
     this->output += image;
   }
   if (this->output.size() != params.size) { this->output.resize(params.size); }
-  timer.stop();
 
-  timer.start("[finalize] clear memory");
-  for (DPF& dpf : this->eXas_eoe) { dpf.clear(); }
-  for (DPF& dpf : this->eXas)     { dpf.clear(); }
-  timer.stop();
+  // free up memory
+  for (BitPPRF& pprf : this->eXas_eoe) { pprf.clear(); }
+  for (BitPPRF& pprf : this->eXas)     { pprf.clear(); }
 }
 
 void Base::expand() {
   // compute shares of the ⟨bᵢ⊗ aᵢ,ε ⊗ s⟩ vector
-  Timer timer("[finalize] compute last term");
   auto baex = TASK_REDUCE<BitString>([this](size_t start, size_t end) {
     BitString out(end - start);
     for (size_t i = start; i < end; i++) {
@@ -331,9 +226,7 @@ void Base::expand() {
   }, params.size);
 
   this->output ^= baex;
-  timer.stop();
 }
-
 
 std::vector<AHE::Ciphertext> Base::homomorphicInnerProduct(
   const std::vector<AHE::Ciphertext>& enc_s
@@ -342,7 +235,7 @@ std::vector<AHE::Ciphertext> Base::homomorphicInnerProduct(
   for (size_t i = 0; i < params.primal.t; i++) {
     uint32_t idx = (i * this->params.primal.blockSize()) + this->e[i];
 
-    // homomorphically compute the inner product of A[idx] and enc(s1)
+    // homomorphically compute the inner product of aᵢand Enc(s)
     std::vector<uint32_t> points = this->A.getNonZeroElements(idx);
     AHE::Ciphertext ctx = enc_s[points[0]];
     for (size_t i = 1; i < points.size(); i++) {

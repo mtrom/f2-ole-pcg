@@ -1,7 +1,5 @@
 #pragma once
 
-#include <libscapi/include/comm/Comm.hpp>
-
 #include "pkg/rot.hpp"
 #include "util/bitstring.hpp"
 #include "util/defines.hpp"
@@ -38,7 +36,7 @@ public:
   int length;
   int threshold;
   int tests;
-  std::shared_ptr<CommParty> channel;
+  Channel channel;
 
   // output of size reduction
   std::vector<std::vector<BitString>> rsi;
@@ -53,24 +51,24 @@ public:
 class EqTestSender : public EqTest {
 public:
   EqTestSender(
-      uint32_t length, int threshold, int tests,
-      std::shared_ptr<CommParty> channel, RandomOTSender rots
+    uint32_t length, int threshold, int tests,
+    Channel channel, ROT::Sender rots
   ) : EqTest(true, length, threshold, tests, channel), rots(rots) { }
   void sizeReduction(uint32_t size) override;
   void productSharing() override;
 protected:
-  RandomOTSender rots;
+  ROT::Sender rots;
 };
 
 // Bob in the protocol (and subprotocols)
 class EqTestReceiver : public EqTest {
 public:
   EqTestReceiver(
-      uint32_t length, int threshold, int tests,
-      std::shared_ptr<CommParty> channel, RandomOTReceiver rots
+    uint32_t length, int threshold, int tests,
+    Channel channel, ROT::Receiver rots
   ) : EqTest(false, length, threshold, tests, channel), rots(rots) { }
   void sizeReduction(uint32_t size) override;
   void productSharing() override;
 protected:
-  RandomOTReceiver rots;
+  ROT::Receiver rots;
 };

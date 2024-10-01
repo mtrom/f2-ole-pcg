@@ -12,17 +12,18 @@ TEST_F(EqTestTests, SizeReduction) {
   const int threshold = 5;
   const int tests = 4;
 
-  EqTestSender sender(length, threshold, tests, this->sch, this->srots);
-  EqTestReceiver receiver(length, threshold, tests, this->rch, this->rrots);
+  auto [srots, rrots] = ROT::mocked(EqTest::numOTs(length, threshold, tests));
 
-  this->launch(
-    [&]() -> bool {
+  auto [sender, receiver] = this->launch(
+    [&](Channel channel) -> EqTestSender {
+      EqTestSender sender(length, threshold, tests, channel, srots);
       sender.sizeReduction(length);
-      return true;
+      return sender;
     },
-    [&]() -> bool {
+    [&](Channel channel) -> EqTestReceiver {
+      EqTestReceiver receiver(length, threshold, tests, channel, rrots);
       receiver.sizeReduction(length);
-      return true;
+      return receiver;
     }
   );
 
@@ -41,17 +42,18 @@ TEST_F(EqTestTests, ProductSharing) {
   const int threshold = 5;
   const int tests = 5;
 
-  EqTestSender sender(length, threshold, tests, this->sch, this->srots);
-  EqTestReceiver receiver(length, threshold, tests, this->rch, this->rrots);
+  auto [srots, rrots] = ROT::mocked(EqTest::numOTs(length, threshold, tests));
 
-  this->launch(
-    [&]() -> bool {
+  auto [sender, receiver] = this->launch(
+    [&](Channel channel) -> EqTestSender {
+      EqTestSender sender(length, threshold, tests, channel, srots);
       sender.productSharing();
-      return true;
+      return sender;
     },
-    [&]() -> bool {
+    [&](Channel channel) -> EqTestReceiver {
+      EqTestReceiver receiver(length, threshold, tests, channel, rrots);
       receiver.productSharing();
-      return true;
+      return receiver;
     }
   );
 
@@ -66,13 +68,15 @@ TEST_F(EqTestTests, EqTestSingleTrue) {
   const int tests = 1;
   const uint32_t value = 2404;
 
+  auto [srots, rrots] = ROT::mocked(EqTest::numOTs(length, threshold, tests));
+
   auto results = this->launch(
-    [&]() -> BitString {
-      EqTestSender sender(length, threshold, tests, this->sch, this->srots);
+    [&](Channel channel) -> BitString {
+      EqTestSender sender(length, threshold, tests, channel, srots);
       return sender.run(std::vector<uint32_t>({value}));
     },
-    [&]() -> BitString {
-      EqTestReceiver receiver(length, threshold, tests, this->rch, this->rrots);
+    [&](Channel channel) -> BitString {
+      EqTestReceiver receiver(length, threshold, tests, channel, rrots);
       return receiver.run(std::vector<uint32_t>({value}));
     }
   );
@@ -88,16 +92,15 @@ TEST_F(EqTestTests, EqTestSingleFalse) {
   const int threshold = 3;
   const int tests = 1;
 
-  shared_ptr<CommParty> sch = this->sch;
-  RandomOTSender srots = this->srots;
+  auto [srots, rrots] = ROT::mocked(EqTest::numOTs(length, threshold, tests));
 
   auto results = this->launch(
-    [&]() -> BitString {
-      EqTestSender sender(length, threshold, tests, this->sch, this->srots);
+    [&](Channel channel) -> BitString {
+      EqTestSender sender(length, threshold, tests, channel, srots);
       return sender.run(std::vector<uint32_t>({2404}));
     },
-    [&]() -> BitString {
-      EqTestReceiver receiver(length, threshold, tests, this->rch, this->rrots);
+    [&](Channel channel) -> BitString {
+      EqTestReceiver receiver(length, threshold, tests, channel, rrots);
       return receiver.run(std::vector<uint32_t>({593}));
     }
   );
@@ -112,18 +115,20 @@ TEST_F(EqTestTests, EqTestBatch) {
   const uint32_t length = 8;
   const int threshold = 3;
 
-  const vector<uint32_t> slist({1294, 451, 5942, 925, 1612, 2969, 2574, 252});
-  const vector<uint32_t> rlist({1294, 294, 5942, 924, 1612, 2969, 226, 2562});
+  const std::vector<uint32_t> slist({1294, 451, 5942, 925, 1612, 2969, 2574, 252});
+  const std::vector<uint32_t> rlist({1294, 294, 5942, 924, 1612, 2969, 226, 2562});
 
   const int tests = slist.size();
 
+  auto [srots, rrots] = ROT::mocked(EqTest::numOTs(length, threshold, tests));
+
   auto results = this->launch(
-    [&]() -> BitString {
-      EqTestSender sender(length, threshold, tests, this->sch, this->srots);
+    [&](Channel channel) -> BitString {
+      EqTestSender sender(length, threshold, tests, channel, srots);
       return sender.run(slist);
     },
-    [&]() -> BitString {
-      EqTestReceiver receiver(length, threshold, tests, this->rch, this->rrots);
+    [&](Channel channel) -> BitString {
+      EqTestReceiver receiver(length, threshold, tests, channel, rrots);
       return receiver.run(rlist);
     }
   );
@@ -144,29 +149,31 @@ TEST_F(EqTestTests, EqTestNumOTs) {
   const uint32_t length = 8;
   const int threshold = 3;
 
-  const vector<uint32_t> slist({1294, 451, 5942, 925, 1612, 2969, 2574, 252});
-  const vector<uint32_t> rlist({1294, 294, 5942, 924, 1612, 2969, 226, 2562});
+  const std::vector<uint32_t> slist({1294, 451, 5942, 925, 1612, 2969, 2574, 252});
+  const std::vector<uint32_t> rlist({1294, 294, 5942, 924, 1612, 2969, 226, 2562});
 
   const int tests = slist.size();
 
-  uint32_t sbefore = this->srots.remaining();
-  uint32_t rbefore = this->rrots.remaining();
+  auto [srots, rrots] = ROT::mocked(EqTest::numOTs(length, threshold, tests));
+
+  uint32_t sbefore = srots.remaining();
+  uint32_t rbefore = rrots.remaining();
 
   auto results = this->launch(
-    [&]() -> uint32_t {
-      EqTestSender sender(length, threshold, tests, this->sch, this->srots);
+    [&](Channel channel) -> uint32_t {
+      EqTestSender sender(length, threshold, tests, channel, srots);
       sender.run(slist);
       return 0;
     },
-    [&]() -> uint32_t {
-      EqTestReceiver receiver(length, threshold, tests, this->rch, this->rrots);
+    [&](Channel channel) -> uint32_t {
+      EqTestReceiver receiver(length, threshold, tests, channel, rrots);
       receiver.run(rlist);
       return 0;
     }
   );
 
-  uint32_t safter = this->srots.remaining();
-  uint32_t rafter = this->rrots.remaining();
+  uint32_t safter = srots.remaining();
+  uint32_t rafter = rrots.remaining();
 
   uint32_t actual = EqTest::numOTs(length, threshold, tests);
 

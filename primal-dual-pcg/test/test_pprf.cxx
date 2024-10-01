@@ -12,7 +12,7 @@
 
 
 class PPRFTests : public NetworkTest { };
-class DPFTests  : public NetworkTest { };
+class BitPPRFTests  : public NetworkTest { };
 
 TEST_F(PPRFTests, ConstructorLambdaOutput) {
   BitString key = BitString::sample(LAMBDA);
@@ -99,18 +99,20 @@ TEST_F(PPRFTests, SendAndReceive) {
   const size_t outsize = LAMBDA;
   const size_t domainsize = 512;
 
+  auto [srots, rrots] = ROT::mocked(batchsize * ((size_t) ceil(log2(domainsize)) + 1));
+
   std::vector<uint32_t> points = sampleDistinct(batchsize, domainsize);
   std::vector<PPRF> sender = PPRF::sample(batchsize, LAMBDA, outsize, domainsize);
   BitString payload = BitString::sample(outsize);
 
   auto results = this->launch(
-    [&]() -> bool {
-      PPRF::send(sender, payload, this->sch, this->srots);
+    [&](Channel channel) -> bool {
+      PPRF::send(sender, payload, channel, srots);
       return true;
     },
-    [&]() -> std::vector<PPRF> {
+    [&](Channel channel) -> std::vector<PPRF> {
       return PPRF::receive(
-        points, LAMBDA, outsize, domainsize, this->rch, this->rrots
+        points, LAMBDA, outsize, domainsize, channel, rrots
       );
 
     }
@@ -130,33 +132,36 @@ TEST_F(PPRFTests, SendAndReceive) {
   }
 }
 
-TEST_F(DPFTests, SameKeySameImage) {
+TEST_F(BitPPRFTests, SameKeySameImage) {
   BitString key = BitString::sample(LAMBDA);
 
-  DPF a(key, LAMBDA);
-  DPF b(key, LAMBDA);
+  BitPPRF a(key, LAMBDA);
+  BitPPRF b(key, LAMBDA);
   EXPECT_EQ(a.image(), b.image());
 }
 
-TEST_F(DPFTests, SendAndReceive) {
+TEST_F(BitPPRFTests, SendAndReceive) {
   const size_t batchsize = LAMBDA;
+  const size_t domainsize = LAMBDA;
+
+  auto [srots, rrots] = ROT::mocked(batchsize * ((size_t) ceil(log2(domainsize))));
 
   std::vector<uint32_t> points = sampleVector(batchsize, LAMBDA);
   BitString payloads = BitString::sample(batchsize);
-  std::vector<DPF> sender = DPF::sample(batchsize, LAMBDA, LAMBDA);
+  std::vector<BitPPRF> sender = BitPPRF::sample(batchsize, LAMBDA, domainsize);
 
   auto results = this->launch(
-    [&]() -> bool {
-      DPF::send(sender, payloads, this->sch, this->srots);
+    [&](Channel channel) -> bool {
+      BitPPRF::send(sender, payloads, channel, srots);
       return true;
     },
-    [&]() -> std::vector<DPF> {
-      return DPF::receive(
-          points, LAMBDA, LAMBDA, this->rch, this->rrots
+    [&](Channel channel) -> std::vector<BitPPRF> {
+      return BitPPRF::receive(
+          points, LAMBDA, domainsize, channel, rrots
       );
     }
   );
-  std::vector<DPF> receiver = results.second;
+  std::vector<BitPPRF> receiver = results.second;
 
   for (size_t i = 0; i < batchsize; i++) {
     ASSERT_EQ(receiver[i].domain(), sender[i].domain());

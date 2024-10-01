@@ -9,65 +9,22 @@
 class ROTTests : public NetworkTest { };
 
 TEST_F(ROTTests, GetPassByReference) {
-  auto get = [](RandomOTSender rot) -> void { rot.get(); };
-  size_t before = this->srots.remaining();
-  get(this->srots);
-  size_t after = this->srots.remaining();
+  auto get = [](ROT::Sender rot) -> void { rot.get(); };
+  auto [srots, rrots] = ROT::mocked(8);
+  size_t before = srots.remaining();
+  get(srots);
+  size_t after = srots.remaining();
   EXPECT_EQ(before - 1, after);
 
-  auto reference = this->srots;
+  auto reference = srots;
   reference.get();
   reference.get();
-  EXPECT_EQ(reference.remaining(), this->srots.remaining());
-}
-
-TEST_F(ROTTests, Run) {
-  size_t total = 128;
-
-  RandomOTSender sender;
-  RandomOTReceiver receiver;
-
-  this->launch(
-    [&]() -> bool {
-      sender.run(total, sch, 3000);
-      return true;
-    },
-    [&]() -> bool {
-      receiver.run(total, this->rch, "localhost", 3000);
-      return true;
-    }
-  );
-
-  while (sender.remaining() > 0) {
-    bool b;
-    BitString m0, m1, mb;
-
-    std::tie(m0, m1) = sender.get();
-    std::tie( b, mb) = receiver.get();
-
-    if (b) { EXPECT_EQ(mb, m1); }
-    else   { EXPECT_EQ(mb, m0); }
-
-    EXPECT_NE(m0, m1);
-  }
+  EXPECT_EQ(reference.remaining(), srots.remaining());
 }
 
 TEST_F(ROTTests, GetSizes) {
   size_t total = 12;
-
-  RandomOTSender sender;
-  RandomOTReceiver receiver;
-
-  this->launch(
-    [&]() -> bool {
-      sender.run(total, sch, 3000);
-      return true;
-    },
-    [&]() -> bool {
-      receiver.run(total, this->rch, "localhost", 3000);
-      return true;
-    }
-  );
+  auto [sender, receiver] = ROT::mocked(total);
 
   // try get() on sizes {2^0, 2^1, ..., 2^12}
   for (size_t i = 0; i < total; i++) {
@@ -86,9 +43,7 @@ TEST_F(ROTTests, TransferMultiBit) {
   size_t total = 128;
   size_t ots = 100;
   size_t m_size = 64;
-
-  RandomOTSender sender;
-  RandomOTReceiver receiver;
+  auto [sender, receiver] = ROT::mocked(total);
 
   std::vector<std::pair<BitString, BitString>> messages;
   for (size_t i = 0; i < ots; i++) {
@@ -97,14 +52,12 @@ TEST_F(ROTTests, TransferMultiBit) {
   BitString choices = BitString::sample(ots);
 
   auto results = this->launch(
-    [&]() -> bool {
-      sender.run(total, this->sch, 3000);
-      sender.transfer(messages, this->sch);
+    [&](Channel channel) -> bool {
+      sender.transfer(messages, channel);
       return true;
     },
-    [&]() -> std::vector<BitString> {
-      receiver.run(total, this->rch, "localhost", 3000);
-      return receiver.transfer(choices, m_size, this->rch);
+    [&](Channel channel) -> std::vector<BitString> {
+      return receiver.transfer(choices, m_size, channel);
     }
   );
   std::vector<BitString> mbs = results.second;
@@ -117,9 +70,7 @@ TEST_F(ROTTests, TransferMultiBit) {
 TEST_F(ROTTests, TransferDifferingSizes) {
   size_t total = 128;
   std::vector<size_t> sizes({1, 2, 4, 8, 16, 32, 64, 128});
-
-  RandomOTSender sender;
-  RandomOTReceiver receiver;
+  auto [sender, receiver] = ROT::mocked(total);
 
   std::vector<std::pair<BitString, BitString>> messages;
   for (size_t i = 0; i < sizes.size(); i++) {
@@ -128,14 +79,12 @@ TEST_F(ROTTests, TransferDifferingSizes) {
   BitString choices = BitString::sample(sizes.size());
 
   auto results = this->launch(
-    [&]() -> bool {
-      sender.run(total, this->sch, 3000);
-      sender.transfer(messages, this->sch);
+    [&](Channel channel) -> bool {
+      sender.transfer(messages, channel);
       return true;
     },
-    [&]() -> std::vector<BitString> {
-      receiver.run(total, this->rch, "localhost", 3000);
-      return receiver.transfer(choices, sizes, this->rch);
+    [&](Channel channel) -> std::vector<BitString> {
+      return receiver.transfer(choices, sizes, channel);
     }
   );
   std::vector<BitString> mbs = results.second;
@@ -149,23 +98,19 @@ TEST_F(ROTTests, TransferDifferingSizes) {
 TEST_F(ROTTests, TransferSingleBit) {
   size_t total = 128;
   size_t ots = 100;
-
-  RandomOTSender sender;
-  RandomOTReceiver receiver;
+  auto [sender, receiver] = ROT::mocked(total);
 
   BitString m0 = BitString::sample(ots);
   BitString m1 = BitString::sample(ots);
   BitString choices = BitString::sample(ots);
 
   auto results = this->launch(
-    [&]() -> bool {
-      sender.run(total, this->sch, 3000);
-      sender.transfer(m0, m1, this->sch);
+    [&](Channel channel) -> bool {
+      sender.transfer(m0, m1, channel);
       return true;
     },
-    [&]() -> BitString {
-      receiver.run(total, this->rch, "localhost", 3000);
-      return receiver.transfer(choices, this->rch);
+    [&](Channel channel) -> BitString {
+      return receiver.transfer(choices, channel);
     }
   );
   BitString mbs = results.second;

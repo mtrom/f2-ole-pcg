@@ -11,10 +11,7 @@
 
 #include "util/defines.hpp"
 
-class PCGTests : public MultiNetworkTest, public MockedCorrelations {
-public:
-  PCGTests() : MultiNetworkTest(2) { }
-};
+class PCGTests : public NetworkTest { };
 
 // insecure but small params to test with
 PCGParams TEST_PARAMS(
@@ -32,18 +29,15 @@ TEST_F(PCGTests, PCGRun) {
   PCG::Receiver bob(params);
 
   std::pair<size_t, size_t> nOTs = alice.numOTs();
-
-  RandomOTSender alice_srots, bob_srots;
-  RandomOTReceiver alice_rrots, bob_rrots;
-  std::tie(alice_srots, bob_rrots) = this->mockRandomOTs(nOTs.first);
-  std::tie(bob_srots, alice_rrots) = this->mockRandomOTs(nOTs.second);
+  auto [alice_srots, bob_rrots] = ROT::mocked(nOTs.first);
+  auto [bob_srots, alice_rrots] = ROT::mocked(nOTs.second);
 
   auto results = this->launch(
-    [&](std::vector<Channel> channels) -> BitString {
+    [&](Channel channel) -> BitString {
       EC::Curve curve; // needed to initalize relic on this thread
-      return alice.run(channels[0], alice_srots, alice_rrots);
+      return alice.run(channel, alice_srots, alice_rrots);
     },
-    [&](int _, Channel channel) -> BitString {
+    [&](Channel channel) -> BitString {
       EC::Curve curve; // needed to initalize relic on this thread
       return bob.run(channel, bob_srots, bob_rrots);
     }
@@ -55,7 +49,7 @@ TEST_F(PCGTests, PCGRun) {
 
   // 2-party correlation outputs
   BitString c0 = results.first;
-  BitString c1 = results.second[0];
+  BitString c1 = results.second;
 
   ASSERT_EQ(a & b, c0 ^ c1);
 }
@@ -70,18 +64,15 @@ TEST_F(PCGTests, PCGNumOTs) {
   PCG::Receiver bob(params);
 
   std::pair<size_t, size_t> nOTs = alice.numOTs();
-
-  RandomOTSender alice_srots, bob_srots;
-  RandomOTReceiver alice_rrots, bob_rrots;
-  std::tie(alice_srots, bob_rrots) = this->mockRandomOTs(nOTs.first);
-  std::tie(bob_srots, alice_rrots) = this->mockRandomOTs(nOTs.second);
+  auto [alice_srots, bob_rrots] = ROT::mocked(nOTs.first);
+  auto [bob_srots, alice_rrots] = ROT::mocked(nOTs.second);
 
   auto results = this->launch(
-    [&](std::vector<Channel> channels) -> BitString {
+    [&](Channel channel) -> BitString {
       EC::Curve curve; // needed to initalize relic on this thread
-      return alice.run(channels[0], alice_srots, alice_rrots);
+      return alice.run(channel, alice_srots, alice_rrots);
     },
-    [&](int _, Channel channel) -> BitString {
+    [&](Channel channel) -> BitString {
       EC::Curve curve; // needed to initalize relic on this thread
       return bob.run(channel, bob_srots, bob_rrots);
     }

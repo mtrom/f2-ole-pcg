@@ -84,15 +84,15 @@ TEST_F(AHETests, SendAndReceive) {
   BitString expected("10101111");
   AHE encrypter;
   auto results = this->launch(
-    [&]() -> bool {
+    [&](Channel channel) -> bool {
       EC::Curve curve;
       std::vector<AHE::Ciphertext> ciphertexts = encrypter.encrypt(expected);
-      encrypter.send(ciphertexts, this->sch);
+      encrypter.send(ciphertexts, channel);
       return true;
     },
-    [&]() -> BitString {
+    [&](Channel channel) -> BitString {
       EC::Curve curve;
-      std::vector<AHE::Ciphertext> ciphertexts = encrypter.receive(expected.size(), this->rch);
+      std::vector<AHE::Ciphertext> ciphertexts = encrypter.receive(expected.size(), channel);
       return encrypter.decrypt(ciphertexts);
     }
   );
@@ -103,15 +103,15 @@ TEST_F(AHETests, SendAndReceive) {
 TEST_F(AHETests, SendAndReceiveCompressed) {
   BitString expected("10101111");
   auto results = this->launch(
-    [&]() -> AHE {
+    [&](Channel channel) -> AHE {
       AHE encrypter;
       std::vector<AHE::Ciphertext> ciphertexts = encrypter.encrypt(expected);
-      encrypter.send(ciphertexts, this->sch, true);
+      encrypter.send(ciphertexts, channel, true);
       return encrypter;
     },
-    [&]() -> std::vector<AHE::Ciphertext> {
+    [&](Channel channel) -> std::vector<AHE::Ciphertext> {
       AHE receiver;
-      return receiver.receive(expected.size(), this->rch, true);
+      return receiver.receive(expected.size(), channel, true);
     }
   );
   EC::Curve curve;

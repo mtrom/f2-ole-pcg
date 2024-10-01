@@ -1,6 +1,3 @@
-[submodule "home/libscapi"]
-	path = libscapi
-	url = git@github.com:mtrom/libscapi.git
 [submodule "home/relic"]
 	path = relic
 	url = git@github.com:relic-toolkit/relic.git

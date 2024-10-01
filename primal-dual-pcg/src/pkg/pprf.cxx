@@ -131,8 +131,7 @@ BitString PPRF::operator()(uint32_t x) const {
 ////////////////////////////////////////////////////////////////////////////////
 
 void PPRF::send(
-  std::vector<PPRF> pprfs, BitString payload,
-  std::shared_ptr<CommParty> channel, RandomOTSender rots
+  std::vector<PPRF> pprfs, BitString payload, Channel channel, ROT::Sender rots
 ) {
   std::vector<std::pair<BitString, BitString>> messages;
   for (const PPRF& pprf : pprfs) {
@@ -158,7 +157,7 @@ void PPRF::send(
 
 std::vector<PPRF> PPRF::receive(
   std::vector<uint32_t> points, size_t keysize, size_t outsize, size_t domainsize,
-  std::shared_ptr<CommParty> channel, RandomOTReceiver rots
+  Channel channel, ROT::Receiver rots
 ) {
   size_t depth = (size_t) ceil(log2(domainsize));
   BitString choices;
@@ -195,10 +194,10 @@ std::vector<PPRF> PPRF::receive(
 
 
 ////////////////////////////////////////////////////////////////////////////////
-// DPF / D2PF SPECIFIC FUNCTIONS
+// BitPPRF SPECIFIC FUNCTIONS
 ////////////////////////////////////////////////////////////////////////////////
 
-DPF::DPF(BitString key, size_t domainsize)
+BitPPRF::BitPPRF(BitString key, size_t domainsize)
   : keysize(key.size()), domainsize(domainsize), depth((size_t) ceil(log2(domainsize)))
 {
   std::vector<BitString> seed({key});
@@ -235,11 +234,11 @@ DPF::DPF(BitString key, size_t domainsize)
   this->expanded = true;
 }
 
-DPF::DPF(std::vector<BitString> keys, uint32_t point)
+BitPPRF::BitPPRF(std::vector<BitString> keys, uint32_t point)
   : keys(keys), point(point), keysize(keys[0].size()), domainsize(1 << keys.size()),
     depth((size_t) ceil(log2(domainsize))), expanded(false) { }
 
-void DPF::expand() {
+void BitPPRF::expand() {
   std::vector<BitString> seed({BitString()});
   auto previous = std::make_shared<std::vector<BitString>>(seed);
 
@@ -292,28 +291,28 @@ void DPF::expand() {
   this->expanded = true;
 }
 
-std::vector<DPF> DPF::sample(size_t n, size_t keysize, size_t domainsize) {
-  std::vector<DPF> dpfs(n);
+std::vector<BitPPRF> BitPPRF::sample(size_t n, size_t keysize, size_t domainsize) {
+  std::vector<BitPPRF> pprfs(n);
 
-  MULTI_TASK([&dpfs, &keysize, &domainsize](size_t start, size_t end) {
+  MULTI_TASK([&pprfs, &keysize, &domainsize](size_t start, size_t end) {
     for (size_t i = start; i < end; i++) {
-      dpfs[i] = DPF(BitString::sample(keysize), domainsize);
+      pprfs[i] = BitPPRF(BitString::sample(keysize), domainsize);
     }
   }, n);
-  return dpfs;
+  return pprfs;
 }
 
-void DPF::send(
-  std::vector<DPF> dpfs, BitString payloads,
-  std::shared_ptr<CommParty> channel, RandomOTSender rots
+void BitPPRF::send(
+  std::vector<BitPPRF> pprfs, BitString payloads,
+  Channel channel, ROT::Sender rots
 ) {
   std::vector<std::pair<BitString, BitString>> messages;
-  for (size_t i = 0; i < dpfs.size(); i++) {
+  for (size_t i = 0; i < pprfs.size(); i++) {
     // the messages are the level left / right xors for the branch levels
-    messages.insert(messages.end(), dpfs[i].levels.begin(), dpfs[i].levels.end() - 1);
+    messages.insert(messages.end(), pprfs[i].levels.begin(), pprfs[i].levels.end() - 1);
 
     // leaf level is sent with both where payload is xor'd
-    std::pair<BitString, BitString> leafs = dpfs[i].levels.back();
+    std::pair<BitString, BitString> leafs = pprfs[i].levels.back();
     std::pair<BitString, BitString> final_msg = std::make_pair(
       leafs.first + leafs.second, leafs.first + leafs.second
     );
@@ -326,9 +325,9 @@ void DPF::send(
   rots.transfer(messages, channel);
 }
 
-std::vector<DPF> DPF::receive(
-    std::vector<uint32_t> points, size_t keysize, size_t domainsize,
-    std::shared_ptr<CommParty> channel, RandomOTReceiver rots
+std::vector<BitPPRF> BitPPRF::receive(
+  std::vector<uint32_t> points, size_t keysize, size_t domainsize,
+  Channel channel, ROT::Receiver rots
 ) {
   size_t depth = (size_t) ceil(log2(domainsize));
   BitString choices;
@@ -348,14 +347,14 @@ std::vector<DPF> DPF::receive(
   // do the oblivious transfer
   std::vector<BitString> allkeys = rots.transfer(choices, sizes, channel);
 
-  std::vector<DPF> dpfs;
+  std::vector<BitPPRF> pprfs;
   for (size_t i = 0; i < points.size(); i++) {
     std::vector<BitString> keys(
       allkeys.begin() + i * depth,
       allkeys.begin() + (i + 1) * depth
     );
-    dpfs.push_back(DPF(keys, points[i]));
+    pprfs.push_back(BitPPRF(keys, points[i]));
   }
 
-  return dpfs;
+  return pprfs;
 }

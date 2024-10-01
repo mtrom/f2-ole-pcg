@@ -1,7 +1,5 @@
 #pragma once
 
-#include <libscapi/include/comm/Comm.hpp>
-
 #include "ahe/ahe.hpp"
 #include "pkg/eqtest.hpp"
 #include "pkg/lpn.hpp"
@@ -19,7 +17,7 @@ public:
   Base(const PCGParams& params) : params(params), ahe(params.primal.l) { }
 
   // run entire protocol
-  BitString run(Channel channel, RandomOTSender srots, RandomOTReceiver rrots) {
+  BitString run(Channel channel, ROT::Sender srots, ROT::Receiver rrots) {
     init();
     prepare();
     online(channel, srots, rrots);
@@ -36,7 +34,7 @@ public:
   virtual void prepare() = 0;
 
   // interactive steps during the protocol
-  virtual void online(Channel channel, RandomOTSender srots, RandomOTReceiver rrots) = 0;
+  virtual void online(Channel channel, ROT::Sender srots, ROT::Receiver rrots) = 0;
 
   // non-interactive steps after online to prepare to output correlations
   virtual void finalize() = 0;
@@ -77,7 +75,7 @@ protected:
 
   // protocol pprfs
   std::vector<PPRF> eXs;
-  std::vector<DPF> eXas_eoe, eXas;
+  std::vector<BitPPRF> eXas_eoe, eXas;
 
   // transpose of (ε ⊗ s) matrix
   std::vector<BitString> eXs_matrix;
@@ -87,7 +85,7 @@ class Sender : public Base {
 public:
   Sender(const PCGParams& params) : Base(params) { }
   void prepare() override;
-  void online(Channel channel, RandomOTSender srots, RandomOTReceiver rrots) override;
+  void online(Channel channel, ROT::Sender srots, ROT::Receiver rrots) override;
   void finalize() override;
   std::pair<size_t, size_t> numOTs() const override;
 };
@@ -96,7 +94,7 @@ class Receiver : public Base {
 public:
   Receiver(const PCGParams& params) : Base(params) { }
   void prepare() override;
-  void online(Channel channel, RandomOTSender srots, RandomOTReceiver rrots) override;
+  void online(Channel channel, ROT::Sender srots, ROT::Receiver rrots) override;
   void finalize() override;
   std::pair<size_t, size_t> numOTs() const override;
 

@@ -8,7 +8,6 @@
 #include "util/bitstring.hpp"
 #include "util/concurrency.hpp"
 #include "util/params.hpp"
-#include "util/timer.hpp"
 
 // taken from
 // https://mischasan.wordpress.com/2011/10/03/the-full-sse2-bit-matrix-transpose-routine/
@@ -78,7 +77,6 @@ void transpose(
 }
 
 std::vector<BitString> transpose(std::vector<PPRF>& pprfs, const PCGParams& params) {
-  Timer timer;
   // how many chunks each thread will process
   const size_t CHUNKS = 4;
 
@@ -86,7 +84,6 @@ std::vector<BitString> transpose(std::vector<PPRF>& pprfs, const PCGParams& para
   const size_t CHUNK_SIZE = params.dual.N() / (THREAD_COUNT * CHUNKS);
   std::vector<std::vector<BitString*>> in_ptrs(THREAD_COUNT * CHUNKS);
 
-  timer.start("[transpose] prepare inputs");
   size_t n = 0;
   for (const PPRF& pprf : pprfs) {
     auto image = pprf.getImage();
@@ -97,18 +94,14 @@ std::vector<BitString> transpose(std::vector<PPRF>& pprfs, const PCGParams& para
       if (n >= params.dual.N()) { break; }
     }
   }
-  timer.stop();
 
-  timer.start("[transpose] prepare outputs");
   std::vector<BitString> output(params.primal.k);
   MULTI_TASK([&](size_t start, size_t end) {
     for (size_t i = start; i < end; i++) {
       output[i].resize(params.dual.N());
     }
   }, params.primal.k);
-  timer.stop();
 
-  timer.start("[transpose] actual transpose");
   MULTI_TASK([&](size_t start, size_t end) {
     for (size_t i = start; i < end; i++) {
       std::vector<uint8_t*> out_ptrs;
@@ -119,12 +112,9 @@ std::vector<BitString> transpose(std::vector<PPRF>& pprfs, const PCGParams& para
       out_ptrs.clear();
     }
   }, THREAD_COUNT * CHUNKS);
-  timer.stop();
 
   // free up processed memory
-  timer.start("[transpose] memory clean up");
   for (PPRF& pprf : pprfs) { pprf.clear(); }
-  timer.stop();
 
   return output;
 }

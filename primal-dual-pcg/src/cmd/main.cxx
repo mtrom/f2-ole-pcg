@@ -12,51 +12,45 @@
 #include "util/timer.hpp"
 
 #define BASE_PORT 3200
-#define COMM_SLEEP 500
-#define COMM_TIMEOUT 5000
-
 
 using address = boost::asio::ip::address;
 namespace options = boost::program_options;
 
-void runSender(const PCGParams& params, const std::string& host) {
-  std::cout << params.toString() << std::endl;
-
+void run(const PCGParams& params, const std::string& host, bool send) {
   Timer timer;
-  SocketPartyData my_socket(address::from_string("0.0.0.0"), BASE_PORT);
-  SocketPartyData their_socket(address::from_string(host), BASE_PORT);
-
-  PCG::Sender pcg(params);
-
-  timer.start("[offline] init");
-  pcg.init();
-  timer.stop();
-
-  timer.start("[offline] prepare");
-  pcg.prepare();
-  timer.stop();
 
   boost::asio::io_service ios;
-  Channel channel = std::make_shared<CommPartyTCPSynced>(ios, my_socket, their_socket);
-  channel->join(COMM_SLEEP, COMM_TIMEOUT);
+  Channel channel = std::make_shared<TCP>(ios, address::from_string(host), BASE_PORT);
 
-  timer.start("[offline] online");
-  Timer subtimer("[online] ot ext");
+  std::cout << params.toString() << std::endl;
+
+  std::unique_ptr<PCG::Base> pcg;
+  if (send) { pcg = std::make_unique<PCG::Sender>(params); }
+  else      { pcg = std::make_unique<PCG::Receiver>(params); }
+
+  // create the mocked random ots for use in the protocol
+  //  (for comp / comm numbers see https://github.com/osu-crypto/libOTe)
   size_t srots, rrots;
-  std::tie(srots, rrots) = pcg.numOTs();
+  std::tie(srots, rrots) = pcg->numOTs();
+  std::cout << "[ot ext] mocking " << srots + rrots << " random ots" << std::endl;
+  ROT::Sender sender = ROT::Sender::mocked(srots);
+  ROT::Receiver receiver = ROT::Receiver::mocked(rrots);
 
-  RandomOTSender sender;
-  sender.run(srots, channel, BASE_PORT + 2);
+  pcg->init();
 
-  RandomOTReceiver receiver;
-  receiver.run(rrots, channel, host, BASE_PORT + 2);
-  subtimer.stop();
-
-  pcg.online(channel, sender, receiver);
+  timer.start("[prepare]");
+  pcg->prepare();
   timer.stop();
 
-  float upload = (float) channel->bytesIn / (size_t) (1 << 20);
-  float download = (float) channel->bytesOut / (size_t) (1 << 20);
+  channel->join();
+
+  timer.start("[online]");
+
+  pcg->online(channel, sender, receiver);
+  timer.stop();
+
+  float upload = (float) channel->upload() / (size_t) (1 << 20);
+  float download = (float) channel->download() / (size_t) (1 << 20);
   std::cout << "          upload   = " << upload << "MB" << std::endl;
   std::cout << "          download = " << download << "MB" << std::endl;
   std::cout << "          total    = " << (upload + download) << "MB" << std::endl;
@@ -64,82 +58,18 @@ void runSender(const PCGParams& params, const std::string& host) {
   channel.reset();
 
   // free public matrices for memory purposes
-  pcg.clear();
+  // (allows for larger parameters to be run)
+  pcg->clear();
 
-  timer.start("[offline] finalize");
-  pcg.finalize();
+  timer.start("[finalize]");
+  pcg->finalize();
   timer.stop();
 
-  timer.start("[offline] reinit");
-  pcg.init();
-  timer.stop();
+  // resample public matrices
+  pcg->init();
 
-  timer.start("[offline] expand");
-  pcg.expand();
-  timer.stop();
-
-  std::cout << GREEN << "[offline] done." << RESET << std::endl;
-}
-
-void runReceiver(const PCGParams& params, const std::string& host) {
-  std::cout << params.toString() << std::endl;
-  Timer timer;
-
-  SocketPartyData my_socket(address::from_string("0.0.0.0"), BASE_PORT);
-  SocketPartyData their_socket(address::from_string(host), BASE_PORT);
-
-  timer.start("[offline] setup");
-  PCG::Receiver pcg(params);
-  timer.stop();
-
-  timer.start("[offline] init");
-  pcg.init();
-  timer.stop();
-
-  timer.start("[offline] prepare");
-  pcg.prepare();
-  timer.stop();
-
-  boost::asio::io_service ios;
-  Channel channel = std::make_shared<CommPartyTCPSynced>(ios, my_socket, their_socket);
-  channel->join(COMM_SLEEP, COMM_TIMEOUT);
-
-  timer.start("[offline] online");
-  Timer subtimer("[online] ot ext");
-  size_t srots, rrots;
-  std::tie(srots, rrots) = pcg.numOTs();
-
-  RandomOTReceiver receiver;
-  receiver.run(rrots, channel, host, BASE_PORT + 2);
-
-  RandomOTSender sender;
-  sender.run(srots, channel, BASE_PORT + 2);
-  subtimer.stop();
-
-  pcg.online(channel, sender, receiver);
-  timer.stop();
-
-  float upload = (float) channel->bytesIn / (size_t) (1 << 20);
-  float download = (float) channel->bytesOut / (size_t) (1 << 20);
-  std::cout << "          upload   = " << upload << "MB" << std::endl;
-  std::cout << "          download = " << download << "MB" << std::endl;
-  std::cout << "          total    = " << (upload + download) << "MB" << std::endl;
-
-  channel.reset();
-
-  // free public matrices for memory purposes
-  pcg.clear();
-
-  timer.start("[offline] finalize");
-  pcg.finalize();
-  timer.stop();
-
-  timer.start("[offline] reinit");
-  pcg.init();
-  timer.stop();
-
-  timer.start("[offline] expand");
-  pcg.expand();
+  timer.start("[expand]");
+  pcg->expand();
   timer.stop();
 
   std::cout << GREEN << "[offline] done." << RESET << std::endl;
@@ -148,28 +78,22 @@ void runReceiver(const PCGParams& params, const std::string& host) {
 void runBoth(const PCGParams& params) {
   std::cout << params.toString();
 
-  SocketPartyData asocket(address::from_string("127.0.0.1"), BASE_PORT);
-  SocketPartyData bsocket(address::from_string("127.0.0.1"), BASE_PORT + 1);
-
-  auto alice = std::async(std::launch::async, [asocket, bsocket, params]() {
+  auto alice = std::async(std::launch::async, [params]() {
     Timer timer;
     boost::asio::io_service ios;
-    Channel channel = std::make_shared<CommPartyTCPSynced>(ios, asocket, bsocket);
-    channel->join(COMM_SLEEP, COMM_TIMEOUT);
+    Channel channel = std::make_shared<TCP>(
+      ios, address::from_string("127.0.0.1"), BASE_PORT, BASE_PORT + 1
+    );
+    channel->join();
 
     PCG::Sender pcg(params);
     pcg.init();
 
-    timer.start("[offline] ot ext");
     size_t srots, rrots;
     std::tie(srots, rrots) = pcg.numOTs();
-
-    RandomOTSender sender;
-    sender.run(srots, channel, BASE_PORT + 2);
-
-    RandomOTReceiver receiver;
-    receiver.run(rrots, channel, "localhost", BASE_PORT + 2);
-    timer.stop();
+    std::cout << "[ot ext] mocking " << srots + rrots << " random ots" << std::endl;
+    ROT::Sender sender = ROT::Sender::mocked(srots);
+    ROT::Receiver receiver = ROT::Receiver::mocked(rrots);
 
     timer.start("[offline] prepare");
     pcg.prepare();
@@ -179,8 +103,8 @@ void runBoth(const PCGParams& params) {
     pcg.online(channel, sender, receiver);
     timer.stop();
 
-    float upload = (float) channel->bytesIn / 1000000;
-    float download = (float) channel->bytesOut / 1000000;
+    float upload = (float) channel->upload() / 1000000;
+    float download = (float) channel->download() / 1000000;
     std::cout << "          upload   = " << upload << "MB" << std::endl;
     std::cout << "          download = " << download << "MB" << std::endl;
     std::cout << "          total    = " << (upload + download) << "MB" << std::endl;
@@ -197,22 +121,20 @@ void runBoth(const PCGParams& params) {
     return std::make_tuple(inputs, pcg.output);
   });
 
-  auto bob = std::async(std::launch::async, [asocket, bsocket, params]() {
+  auto bob = std::async(std::launch::async, [params]() {
     boost::asio::io_service ios;
-    Channel channel = std::make_shared<CommPartyTCPSynced>(ios, bsocket, asocket);
-    channel->join(COMM_SLEEP, COMM_TIMEOUT);
+    Channel channel = std::make_shared<TCP>(
+      ios, address::from_string("127.0.0.1"), BASE_PORT + 1, BASE_PORT
+    );
+    channel->join();
 
     PCG::Receiver pcg(params);
     pcg.init();
 
     size_t srots, rrots;
     std::tie(srots, rrots) = pcg.numOTs();
-
-    RandomOTReceiver receiver;
-    receiver.run(rrots, channel, "localhost", BASE_PORT + 2);
-
-    RandomOTSender sender;
-    sender.run(srots, channel, BASE_PORT + 2);
+    ROT::Sender sender = ROT::Sender::mocked(srots);
+    ROT::Receiver receiver = ROT::Receiver::mocked(rrots);
 
     BitString output = pcg.run(channel, sender, receiver);
     BitString inputs = pcg.inputs();
@@ -296,9 +218,9 @@ int main(int argc, char *argv[]) {
     if (both) {
       runBoth(params);
     } else if (send) {
-      runSender(params, host);
+      run(params, host, true);
     } else if (recv) {
-      runReceiver(params, host);
+      run(params, host, false);
     } else {
       std::cerr << "[offline] need one of --send, --recv, or --both to be true" << std::endl;
     }

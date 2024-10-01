@@ -1,6 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
 
-# List all files containing tests. (Change as needed)
 set(TEST_FILES
   main.cxx
   test_ahe.cxx
@@ -12,7 +11,7 @@ set(TEST_FILES
   test_random.cxx
   test_rot.cxx
 )
-set(TEST_MAIN unit_tests)   # Default name for test executable (change if you wish).
+set(TEST_MAIN unit_tests)
 
 # --------------------------------------------------------------------------------
 #                         Make Tests (no change needed).
@@ -33,7 +32,7 @@ enable_testing()
 add_executable(${TEST_MAIN} ${TEST_FILES})
 set_target_properties(${TEST_MAIN} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
 set_target_properties(${TEST_MAIN} PROPERTIES
-    CXX_STANDARD 14
+    CXX_STANDARD 17
     CXX_STANDARD_REQUIRED YES
     CXX_EXTENSIONS YES
 )

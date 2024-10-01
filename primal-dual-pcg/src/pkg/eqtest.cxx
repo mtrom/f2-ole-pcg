@@ -137,7 +137,7 @@ void EqTestSender::sizeReduction(uint32_t size) {
 
   for (size_t t = 0; t < this->tests; t++) {
     BitString x = BitString::sample(size);
-    vector<uint32_t> a = sampleVector(size, size + 1);
+    std::vector<uint32_t> a = sampleVector(size, size + 1);
 
     size_t mbits = (size_t) ceil(log2(size + 1));
 

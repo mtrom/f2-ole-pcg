@@ -3,8 +3,6 @@
 #include <utility>
 #include <tuple>
 
-#include <libscapi/include/comm/Comm.hpp>
-
 #include "pkg/rot.hpp"
 #include "util/bitstring.hpp"
 #include "util/concurrency.hpp"
@@ -34,9 +32,7 @@ public:
   void expand();
 
   std::shared_ptr<std::vector<BitString>> getImage() const { return leafs; }
-
   size_t domain() const { return domainsize; }
-
   void clear() { leafs.reset(); levels.clear(); keys.clear(); }
 
   // for debugging purposes
@@ -44,12 +40,11 @@ public:
 
   // share across `channel` punctured according to `points` with output `payload`
   static void send(
-    std::vector<PPRF> pprf, BitString payload,
-    std::shared_ptr<CommParty> channel, RandomOTSender rots
+    std::vector<PPRF> pprf, BitString payload, Channel channel, ROT::Sender rots
   );
   static std::vector<PPRF> receive(
     std::vector<uint32_t> points, size_t keysize, size_t outsize, size_t domainsize,
-    std::shared_ptr<CommParty> channel, RandomOTReceiver rots
+    Channel channel, ROT::Receiver rots
   );
 protected:
   std::vector<std::pair<BitString, BitString>> levels;
@@ -68,19 +63,19 @@ protected:
   uint32_t puncture;
 };
 
-// D(istributed) P(oint) F(unction) (i.e., special case of pprf where the output is binary)
-class DPF {
+// special case of pprf where the output is binary
+class BitPPRF {
 public:
-  DPF() { }
+  BitPPRF() { }
 
   // initialize given the root `key`
-  DPF(BitString key, size_t domainsize);
+  BitPPRF(BitString key, size_t domainsize);
 
-  // initialize the dpf which has been punctured at `x`
-  DPF(std::vector<BitString> keys, uint32_t point);
+  // initialize the pprf which has been punctured at `x`
+  BitPPRF(std::vector<BitString> keys, uint32_t point);
 
-  // create `n` dpfs with randomly sampled keys
-  static std::vector<DPF> sample(size_t n, size_t keysize, size_t domainsize);
+  // create `n` pprfs with randomly sampled keys
+  static std::vector<BitPPRF> sample(size_t n, size_t keysize, size_t domainsize);
 
   // expand a pprf that has been shared
   void expand();
@@ -88,24 +83,22 @@ public:
   // the truth table for the function
   BitString image() const {
     if (!this->expanded) {
-      throw std::runtime_error("[DPF::image()] dpf has not been expanded yet");
+      throw std::runtime_error("[BitPPRF::image()] pprf has not been expanded yet");
     }
     return (*this->_image);
   }
 
   size_t domain() const { return domainsize; }
-
   void clear() { _image.reset(); levels.clear(); keys.clear(); }
 
   // share across `channel` punctured according to `points` with outputs `payloads`
   static void send(
-    std::vector<DPF> dpfs, BitString payloads,
-    std::shared_ptr<CommParty> channel, RandomOTSender rots
+    std::vector<BitPPRF> pprfs, BitString payloads, Channel channel, ROT::Sender rots
   );
 
-  static std::vector<DPF> receive(
+  static std::vector<BitPPRF> receive(
     std::vector<uint32_t> points, size_t keysize, size_t domainsize,
-    std::shared_ptr<CommParty> channel, RandomOTReceiver rots
+    Channel channel, ROT::Receiver rots
   );
 protected:
   std::shared_ptr<BitString> _image;
