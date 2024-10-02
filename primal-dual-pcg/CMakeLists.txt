@@ -40,7 +40,7 @@ target_link_libraries(${LIBRARY_NAME} PRIVATE ${Boost_LIBRARIES})
 target_link_libraries(${LIBRARY_NAME} PRIVATE ${OPENSSL_LIBRARIES})
 target_link_libraries(${LIBRARY_NAME} PRIVATE oc::cryptoTools oc::libOTe)
 target_link_libraries(${LIBRARY_NAME} PRIVATE
-  gmp boost_system boost_thread boost_serialization boost_filesystem pthread dl crypto ssl z
+  gmp boost_system boost_thread boost_filesystem pthread dl crypto ssl
 )
 
 # add executables
@@ -51,7 +51,7 @@ target_link_libraries(${FRONTEND_EXEC} PRIVATE ${Boost_FILESYSTEM_LIBRARY})
 target_link_libraries(${FRONTEND_EXEC} PRIVATE ${Boost_PROGRAM_OPTIONS_LIBRARY})
 target_link_libraries(${FRONTEND_EXEC} PRIVATE ${Boost_SYSTEM_LIBRARY})
 target_link_libraries(${FRONTEND_EXEC} PRIVATE
-  gmp boost_system boost_thread boost_serialization pthread dl crypto ssl z
+  gmp boost_system boost_thread pthread dl crypto ssl
 )
 
 # properties

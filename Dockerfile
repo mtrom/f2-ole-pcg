@@ -43,7 +43,7 @@ RUN apt-get -y install \
 # install cmake dependencies
 RUN apt-get -y install \
       cmake \
-      libssl-dev \
+      libssl-dev
 
 # install programs used for system exploration
 RUN apt-get -y install \
