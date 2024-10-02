@@ -36,22 +36,23 @@ set(SOURCES
 
 add_library(${LIBRARY_NAME} ${SOURCES})
 target_include_directories(${LIBRARY_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/include)
-target_link_libraries(${LIBRARY_NAME} PRIVATE ${Boost_LIBRARIES})
 target_link_libraries(${LIBRARY_NAME} PRIVATE ${OPENSSL_LIBRARIES})
+target_link_libraries(${LIBRARY_NAME} PRIVATE ${Boost_FILESYSTEM_LIBRARY})
+target_link_libraries(${LIBRARY_NAME} PRIVATE ${Boost_PROGRAM_OPTIONS_LIBRARY})
+target_link_libraries(${LIBRARY_NAME} PRIVATE ${Boost_SYSTEM_LIBRARY})
 target_link_libraries(${LIBRARY_NAME} PRIVATE oc::cryptoTools oc::libOTe)
 target_link_libraries(${LIBRARY_NAME} PRIVATE
-  gmp boost_system boost_thread boost_filesystem pthread dl crypto ssl
+  gmp boost_system boost_filesystem pthread dl crypto ssl
 )
 
 # add executables
 add_executable(${FRONTEND_EXEC} src/cmd/main.cxx)
 target_link_libraries(${FRONTEND_EXEC} PRIVATE ${LIBRARY_NAME})
-target_link_libraries(${FRONTEND_EXEC} PRIVATE ${Boost_LIBRARIES})
 target_link_libraries(${FRONTEND_EXEC} PRIVATE ${Boost_FILESYSTEM_LIBRARY})
 target_link_libraries(${FRONTEND_EXEC} PRIVATE ${Boost_PROGRAM_OPTIONS_LIBRARY})
 target_link_libraries(${FRONTEND_EXEC} PRIVATE ${Boost_SYSTEM_LIBRARY})
 target_link_libraries(${FRONTEND_EXEC} PRIVATE
-  gmp boost_system boost_thread pthread dl crypto ssl
+  gmp boost_system pthread dl crypto ssl
 )
 
 # properties

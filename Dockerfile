@@ -90,6 +90,27 @@ RUN apt-get -y install \
       traceroute \
       libgmp3-dev
 
+# install the specific version of boost that libOTe wants
+RUN wget https://archives.boost.io/release/1.86.0/source/boost_1_86_0.tar.gz && \
+    tar -xzf boost_1_86_0.tar.gz && \
+    (cd ./boost_1_86_0; ./bootstrap.sh) && \
+    (cd ./boost_1_86_0/; ./b2 install --with-program_options --with-thread --with-system --with-filesystem) && \
+    rm -r boost_1_86_0 boost_1_86_0.tar.gz
+
+# configure our user
+WORKDIR /home/pcg-user/
+
+# copy repository to the image
+COPY . .
+
+# build and install libOTe
+RUN (cd libOTe; python3 build.py --all --boost --sodium --relic --install)
+
+# build our project
+RUN (cd primal-dual-pcg/build; git clean -xfd) && \
+    (cd primal-dual-pcg/build; cmake ..) && \
+    (cd primal-dual-pcg/build; make)
+
 # remove unneeded .deb files
 RUN rm -r /var/lib/apt/lists/*
 
@@ -101,8 +122,10 @@ RUN useradd -m -s /bin/bash pcg-user &&  \
 ARG USER=PCG\ User
 ARG EMAIL=nobody@example.com
 
-# configure your environment
 USER pcg-user
 RUN rm -f ~/.bash_logout
-WORKDIR /home/pcg-user
+
+# configure the endpoints to reach
 CMD ["/bin/bash", "-l"]
+CMD ["./primal-dual-pcg/build/protocol"]
+CMD ["./primal-dual-pcg/build/unit_tests"]
