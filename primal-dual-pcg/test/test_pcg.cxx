@@ -34,11 +34,11 @@ TEST_F(PCGTests, PCGRun) {
 
   auto results = this->launch(
     [&](Channel channel) -> BitString {
-      EC::Curve curve; // needed to initalize relic on this thread
+      osuCrypto::REllipticCurve curve; // needed to initalize relic on this thread
       return alice.run(channel, alice_srots, alice_rrots);
     },
     [&](Channel channel) -> BitString {
-      EC::Curve curve; // needed to initalize relic on this thread
+      osuCrypto::REllipticCurve curve; // needed to initalize relic on this thread
       return bob.run(channel, bob_srots, bob_rrots);
     }
   );
@@ -69,11 +69,11 @@ TEST_F(PCGTests, PCGNumOTs) {
 
   auto results = this->launch(
     [&](Channel channel) -> BitString {
-      EC::Curve curve; // needed to initalize relic on this thread
+      osuCrypto::REllipticCurve curve; // needed to initalize relic on this thread
       return alice.run(channel, alice_srots, alice_rrots);
     },
     [&](Channel channel) -> BitString {
-      EC::Curve curve; // needed to initalize relic on this thread
+      osuCrypto::REllipticCurve curve; // needed to initalize relic on this thread
       return bob.run(channel, bob_srots, bob_rrots);
     }
   );

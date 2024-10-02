@@ -32,7 +32,7 @@ enable_testing()
 add_executable(${TEST_MAIN} ${TEST_FILES})
 set_target_properties(${TEST_MAIN} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
 set_target_properties(${TEST_MAIN} PROPERTIES
-    CXX_STANDARD 17
+    CXX_STANDARD 20
     CXX_STANDARD_REQUIRED YES
     CXX_EXTENSIONS YES
 )
@@ -40,6 +40,7 @@ target_include_directories(${LIBRARY_NAME} PUBLIC ${PROJECT_SOURCE_DIR})
 target_link_libraries(${TEST_MAIN}
   GTest::gtest_main
   ${LIBRARY_NAME}
+  ${Boost_FILESYSTEM_LIBRARY}
 )
 include(GoogleTest)
 gtest_discover_tests(${TEST_MAIN})

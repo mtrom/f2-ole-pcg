@@ -85,13 +85,13 @@ TEST_F(AHETests, SendAndReceive) {
   AHE encrypter;
   auto results = this->launch(
     [&](Channel channel) -> bool {
-      EC::Curve curve;
+      osuCrypto::REllipticCurve curve;
       std::vector<AHE::Ciphertext> ciphertexts = encrypter.encrypt(expected);
       encrypter.send(ciphertexts, channel);
       return true;
     },
     [&](Channel channel) -> BitString {
-      EC::Curve curve;
+      osuCrypto::REllipticCurve curve;
       std::vector<AHE::Ciphertext> ciphertexts = encrypter.receive(expected.size(), channel);
       return encrypter.decrypt(ciphertexts);
     }
@@ -114,7 +114,7 @@ TEST_F(AHETests, SendAndReceiveCompressed) {
       return receiver.receive(expected.size(), channel, true);
     }
   );
-  EC::Curve curve;
+  osuCrypto::REllipticCurve curve;
   AHE encrypter = results.first;
   BitString actual = encrypter.decrypt(results.second);
   ASSERT_EQ(expected, actual);

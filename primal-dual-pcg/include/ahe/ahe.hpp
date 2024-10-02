@@ -5,14 +5,17 @@
 #include <string>
 #include <vector>
 
-#include "ahe/curve.hpp"
+#include <cryptoTools/Crypto/RCurve.h>
+
 #include "util/bitstring.hpp"
 #include "util/defines.hpp"
 #include "util/random.hpp"
 
+using namespace osuCrypto;
+
 class AHE {
 public:
-  using Ciphertext = std::pair<EC::Point, EC::Point>;
+  using Ciphertext = std::pair<REccPoint, REccPoint>;
 
   // sample a random public & private key
   AHE(size_t max_ops = 1);
@@ -34,22 +37,22 @@ public:
   std::vector<Ciphertext> receive(size_t n, Channel channel, bool compress = false);
 
   // check if a point is zero
-  bool isZero(const EC::Point& point) const;
+  bool isZero(const REccPoint& point) const;
 private:
-  EC::Curve curve;
+  REllipticCurve curve;
 
   // maximum number of homomorphic operations supported
   size_t max_ops;
 
   // El Gamal public & private keys (h = g^x)
-  EC::Number x;
-  EC::Point h;
+  REccNumber x;
+  REccPoint h;
 
   // g^[q/2] where q is the group order
-  EC::Point one;
+  REccPoint one;
 
   // lookup table for decryption
-  std::vector<EC::Point> lookup;
+  std::vector<REccPoint> lookup;
 
   // for hashing to curve
   PRF<BitString> prf;

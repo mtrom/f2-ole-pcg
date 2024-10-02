@@ -1,4 +1,4 @@
-FROM ubuntu:focal
+FROM ubuntu:jammy
 
 # set environment variables for tzdata
 ARG TZ=America/New_York
@@ -37,23 +37,13 @@ RUN apt-get update && \
 # install clang-related packages
 RUN apt-get -y install \
       clang \
-      clang-10-doc \
       lldb \
       clang-format
 
 # install cmake dependencies
 RUN apt-get -y install \
       cmake \
-      ninja-build \
       libssl-dev \
-      libboost-all-dev \
-      doctest-dev \
-      doxygen \
-      libcrypto++-dev \
-      libcrypto++-doc \
-      libcrypto++-utils \
-      libsqlite3-dev \
-      sqlite3
 
 # install programs used for system exploration
 RUN apt-get -y install \
@@ -75,7 +65,6 @@ RUN apt-get -y install \
       nano \
       psmisc \
       python3 \
-      python \
       sudo \
       wget \
       zip \
@@ -96,7 +85,6 @@ RUN apt-get -y install \
       inetutils-ping \
       iproute2 \
       net-tools \
-      netcat \
       telnet \
       time \
       traceroute \
