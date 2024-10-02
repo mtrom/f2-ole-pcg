@@ -22,6 +22,35 @@ TEST_F(ROTTests, GetPassByReference) {
   EXPECT_EQ(reference.remaining(), srots.remaining());
 }
 
+TEST_F(ROTTests, Run) {
+  size_t total = 128;
+
+  ROT::Sender sender;
+  ROT::Receiver receiver;
+
+  this->launch(
+    [&](Channel channel) -> std::pair<size_t, size_t> {
+      return sender.run(total, channel->host().to_string(), TEST_BASE_PORT + 2);
+    },
+    [&](Channel channel) -> std::pair<size_t, size_t> {
+      return receiver.run(total, channel->host().to_string(), TEST_BASE_PORT + 2);
+    }
+  );
+
+  while (sender.remaining() > 0) {
+    bool b;
+    BitString m0, m1, mb;
+
+    std::tie(m0, m1) = sender.get();
+    std::tie( b, mb) = receiver.get();
+
+    if (b) { EXPECT_EQ(mb, m1); }
+    else   { EXPECT_EQ(mb, m0); }
+
+    EXPECT_NE(m0, m1);
+  }
+}
+
 TEST_F(ROTTests, GetSizes) {
   size_t total = 12;
   auto [sender, receiver] = ROT::mocked(total);

@@ -12,6 +12,7 @@
 #include "util/timer.hpp"
 
 #define BASE_PORT 3200
+#define OT_EXT_PORT 3300
 
 using address = boost::asio::ip::address;
 namespace options = boost::program_options;
@@ -28,14 +29,6 @@ void run(const PCGParams& params, const std::string& host, bool send) {
   if (send) { pcg = std::make_unique<PCG::Sender>(params); }
   else      { pcg = std::make_unique<PCG::Receiver>(params); }
 
-  // create the mocked random ots for use in the protocol
-  //  (for comp / comm numbers see https://github.com/osu-crypto/libOTe)
-  size_t srots, rrots;
-  std::tie(srots, rrots) = pcg->numOTs();
-  std::cout << "[ot ext] mocking " << srots + rrots << " random ots" << std::endl;
-  ROT::Sender sender = ROT::Sender::mocked(srots);
-  ROT::Receiver receiver = ROT::Receiver::mocked(rrots);
-
   pcg->init();
 
   timer.start("[prepare]");
@@ -45,15 +38,38 @@ void run(const PCGParams& params, const std::string& host, bool send) {
   channel->join();
 
   timer.start("[online]");
+  size_t upload, download;
+
+  // create the mocked random ots for use in the protocol
+  auto [srots, rrots] = pcg->numOTs();
+  ROT::Sender sender;
+  ROT::Receiver receiver;
+  if (send) {
+    auto comms = sender.run(srots, host, OT_EXT_PORT);
+    upload += comms.first;
+    download += comms.second;
+    comms = receiver.run(rrots, host, OT_EXT_PORT);
+    upload += comms.first;
+    download += comms.second;
+  } else {
+    auto comms = receiver.run(rrots, host, OT_EXT_PORT);
+    upload += comms.first;
+    download += comms.second;
+    comms = sender.run(srots, host, OT_EXT_PORT);
+    upload += comms.first;
+    download += comms.second;
+  }
 
   pcg->online(channel, sender, receiver);
   timer.stop();
 
-  float upload = (float) channel->upload() / (size_t) (1 << 20);
-  float download = (float) channel->download() / (size_t) (1 << 20);
-  std::cout << "          upload   = " << upload << "MB" << std::endl;
-  std::cout << "          download = " << download << "MB" << std::endl;
-  std::cout << "          total    = " << (upload + download) << "MB" << std::endl;
+  upload += channel->upload();
+  download += channel->download();
+  float uploadMB = (float) upload / (size_t) (1 << 20);
+  float downloadMB = (float) download / (size_t) (1 << 20);
+  std::cout << "          upload   = " << uploadMB << "MB" << std::endl;
+  std::cout << "          download = " << downloadMB << "MB" << std::endl;
+  std::cout << "          total    = " << (uploadMB + downloadMB) << "MB" << std::endl;
 
   channel.reset();
 
@@ -76,7 +92,7 @@ void run(const PCGParams& params, const std::string& host, bool send) {
 }
 
 void runBoth(const PCGParams& params) {
-  std::cout << params.toString();
+  std::cout << params.toString() << std::endl;
 
   auto alice = std::async(std::launch::async, [params]() {
     Timer timer;
@@ -89,25 +105,33 @@ void runBoth(const PCGParams& params) {
     PCG::Sender pcg(params);
     pcg.init();
 
-    size_t srots, rrots;
-    std::tie(srots, rrots) = pcg.numOTs();
-    std::cout << "[ot ext] mocking " << srots + rrots << " random ots" << std::endl;
-    ROT::Sender sender = ROT::Sender::mocked(srots);
-    ROT::Receiver receiver = ROT::Receiver::mocked(rrots);
-
     timer.start("[offline] prepare");
     pcg.prepare();
     timer.stop();
 
     timer.start("[offline] online");
+    size_t upload, download;
+
+    // create the mocked random ots for use in the protocol
+    auto [srots, rrots] = pcg.numOTs();
+    ROT::Sender sender;
+    ROT::Receiver receiver;
+    auto comms = sender.run(srots, "127.0.0.1", OT_EXT_PORT);
+    upload += comms.first;
+    download += comms.second;
+    comms = receiver.run(rrots, "127.0.0.1", OT_EXT_PORT);
+    upload += comms.first;
+    download += comms.second;
     pcg.online(channel, sender, receiver);
     timer.stop();
 
-    float upload = (float) channel->upload() / 1000000;
-    float download = (float) channel->download() / 1000000;
-    std::cout << "          upload   = " << upload << "MB" << std::endl;
-    std::cout << "          download = " << download << "MB" << std::endl;
-    std::cout << "          total    = " << (upload + download) << "MB" << std::endl;
+    upload += channel->upload();
+    download += channel->download();
+    float uploadMB = (float) upload / (size_t) (1 << 20);
+    float downloadMB = (float) download / (size_t) (1 << 20);
+    std::cout << "          upload   = " << uploadMB << "MB" << std::endl;
+    std::cout << "          download = " << downloadMB << "MB" << std::endl;
+    std::cout << "          total    = " << (uploadMB + downloadMB) << "MB" << std::endl;
 
     timer.start("[offline] finalize");
     pcg.finalize();
@@ -131,10 +155,11 @@ void runBoth(const PCGParams& params) {
     PCG::Receiver pcg(params);
     pcg.init();
 
-    size_t srots, rrots;
-    std::tie(srots, rrots) = pcg.numOTs();
-    ROT::Sender sender = ROT::Sender::mocked(srots);
-    ROT::Receiver receiver = ROT::Receiver::mocked(rrots);
+    auto [srots, rrots] = pcg.numOTs();
+    ROT::Sender sender;
+    ROT::Receiver receiver;
+    receiver.run(rrots, "127.0.0.1", OT_EXT_PORT);
+    sender.run(srots, "127.0.0.1", OT_EXT_PORT);
 
     BitString output = pcg.run(channel, sender, receiver);
     BitString inputs = pcg.inputs();

@@ -50,6 +50,8 @@ public:
   // generate `size` mocked random ots
   static Sender mocked(size_t size);
 
+  std::pair<size_t, size_t> run(size_t size, std::string host, int port);
+
   std::pair<BitString, BitString> get(size_t size = DEFAULT_ELEMENT_SIZE) override;
 
   // use these random ots to perform some number of normal ots
@@ -79,6 +81,8 @@ public:
 
   // generate `size` mocked random ots
   static Receiver mocked(size_t size);
+
+  std::pair<size_t, size_t> run(size_t size, std::string host, int port);
 
   std::pair<bool, BitString> get(size_t size = DEFAULT_ELEMENT_SIZE) override;
 

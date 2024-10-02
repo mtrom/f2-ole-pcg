@@ -2,9 +2,74 @@
 
 #include <stdexcept>
 
+#include "libOTe/TwoChooseOne/Silent/SilentOtExtReceiver.h"
+#include "libOTe/TwoChooseOne/Silent/SilentOtExtSender.h"
+#include "libOTe/Tools/Coproto.h"
+#include "coproto/Socket/AsioSocket.h"
+
 #include "util/random.hpp"
 
+namespace libOTe = osuCrypto;
+
 namespace ROT {
+
+////////////////////////////////////////////////////////////////////////////////
+// RUN
+////////////////////////////////////////////////////////////////////////////////
+
+std::pair<size_t, size_t> Sender::run(size_t size, std::string host, int port) {
+  libOTe::SilentOtExtSender sender;
+  sender.configure(size);
+
+  // set up communication
+  auto chl = libOTe::cp::asioConnect(host + ":" + std::to_string(port), true);
+
+  libOTe::PRNG prng(libOTe::sysRandomSeed());
+  libOTe::cp::sync_wait(sender.genSilentBaseOts(prng, chl, true));
+
+  std::vector<std::array<libOTe::block, 2>> messages(size);
+  auto protocol = sender.silentSend(messages, prng, chl);
+  libOTe::cp::sync_wait(protocol);
+  libOTe::cp::sync_wait(chl.flush());
+
+  for (auto message : messages) {
+    this->results->push_back(std::make_pair(
+      BitString(message[0].data(), Base::DEFAULT_ELEMENT_SIZE),
+      BitString(message[1].data(), Base::DEFAULT_ELEMENT_SIZE)
+    ));
+  }
+  *this->first = 0;
+  *this->last = this->results->size();
+
+  return std::make_pair(chl.bytesSent(), chl.bytesReceived());
+}
+
+std::pair<size_t, size_t> Receiver::run(size_t size, std::string host, int port) {
+  libOTe::SilentOtExtReceiver receiver;
+  receiver.configure(size);
+
+  // set up communication
+  auto chl = libOTe::cp::asioConnect(host + ":" + std::to_string(port), false);
+
+  libOTe::PRNG prng(libOTe::sysRandomSeed());
+  libOTe::cp::sync_wait(receiver.genSilentBaseOts(prng, chl, true));
+
+  std::vector<libOTe::block> messages(size);
+  libOTe::BitVector choices(size);
+  auto protocol = receiver.silentReceive(choices, messages, prng, chl);
+  libOTe::cp::sync_wait(protocol);
+  libOTe::cp::sync_wait(chl.flush());
+
+  for (size_t i = 0; i < size; i++) {
+    this->results->push_back(std::make_pair(
+      choices[i], BitString(messages[i].data(), Base::DEFAULT_ELEMENT_SIZE)
+    ));
+  }
+
+  *this->first = 0;
+  *this->last = this->results->size();
+  return std::make_pair(chl.bytesSent(), chl.bytesReceived());
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // GET

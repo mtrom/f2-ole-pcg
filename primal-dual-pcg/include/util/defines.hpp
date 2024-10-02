@@ -16,7 +16,7 @@ class TCP {
 public:
   TCP(boost::asio::io_service& ios, boost::asio::ip::address host, int inport, int outport = -1)
     : client_ios(ios), server_ios(ios), acceptor(ios, tcp::endpoint(tcp::v4(), inport)),
-      client(ios), server(ios), host(host), port(outport == -1 ? inport : outport) { }
+      client(ios), server(ios), host_(host), port(outport == -1 ? inport : outport) { }
 
 	void join() {
     int slept = 0;
@@ -27,7 +27,7 @@ public:
       try {
         if (!connected) {
           tcp::resolver resolver(this->client_ios);
-          tcp::resolver::query query(this->host.to_string(), std::to_string(this->port));
+          tcp::resolver::query query(this->host_.to_string(), std::to_string(this->port));
           tcp::resolver::iterator iterator = resolver.resolve(query);
           boost::asio::connect(this->client, iterator);
           connected = true;
@@ -35,7 +35,7 @@ public:
       }
       catch (const boost::system::system_error& ex) {
         if (slept > COMM_TIMEOUT) {
-          std::cerr << "[TCP] failed to connect to host " << this->host.to_string() << std::endl;
+          std::cerr << "[TCP] failed to connect to host " << this->host_.to_string() << std::endl;
           throw ex;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(COMM_SLEEP));
@@ -71,6 +71,7 @@ public:
 
   size_t upload() { return upload_; }
   size_t download() { return download_; }
+  boost::asio::ip::address host() { return host_; }
 protected:
   boost::asio::io_service& client_ios;
   boost::asio::io_service& server_ios;
@@ -79,7 +80,7 @@ protected:
   tcp::socket server;
 
   size_t upload_, download_;
-  boost::asio::ip::address host;
+  boost::asio::ip::address host_;
   int port;
 };
 
