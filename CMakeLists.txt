@@ -14,9 +14,9 @@ include(libOTe)
 
 include_directories(
   /usr/include/openssl
-  usr/local/include
-  $ENV{HOME}/libOTe/cryptoTools
-  $ENV{HOME}
+  /usr/local/include
+  /home/pcg-user/thirdparty/libOTe/cryptoTools
+  /home/pcg-user/thirdparty/libOTe/out/build/linux/cryptoTools/
 )
 link_directories(/usr/lib/ssl)
 
@@ -36,7 +36,6 @@ set(SOURCES
 
 add_library(${LIBRARY_NAME} ${SOURCES})
 target_include_directories(${LIBRARY_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/include)
-target_link_libraries(${LIBRARY_NAME} PRIVATE ${OPENSSL_LIBRARIES})
 target_link_libraries(${LIBRARY_NAME} PRIVATE ${Boost_FILESYSTEM_LIBRARY})
 target_link_libraries(${LIBRARY_NAME} PRIVATE ${Boost_PROGRAM_OPTIONS_LIBRARY})
 target_link_libraries(${LIBRARY_NAME} PRIVATE ${Boost_SYSTEM_LIBRARY})

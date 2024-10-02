@@ -77,7 +77,8 @@ RUN apt-get -y install \
       locales \
       wamerican \
       libssl-dev \
-      libgmp3-dev
+      libgmp3-dev \
+      libtool
 
 # install programs used for networking
 RUN apt-get -y install \
@@ -100,16 +101,23 @@ RUN wget https://archives.boost.io/release/1.86.0/source/boost_1_86_0.tar.gz && 
 # configure our user
 WORKDIR /home/pcg-user/
 
-# copy repository to the image
-COPY . .
+COPY thirdparty ./thirdparty/
 
 # build and install libOTe
-RUN (cd libOTe; python3 build.py --all --boost --sodium --relic --install)
+RUN (cd thirdparty/libOTe; python3 build.py --all --boost --sodium --relic)
+
+# copy repository to the image
+COPY include ./include/
+COPY src ./src/
+COPY test ./test/
+COPY cmake ./cmake/
+COPY CMakeLists.txt .
 
 # build our project
-RUN (cd primal-dual-pcg/build; git clean -xfd) && \
-    (cd primal-dual-pcg/build; cmake ..) && \
-    (cd primal-dual-pcg/build; make)
+RUN rm -rf build/ && \
+    mkdir build && \
+    (cd build; cmake ..) && \
+    (cd build; make -j$(nproc))
 
 # remove unneeded .deb files
 RUN rm -r /var/lib/apt/lists/*
@@ -127,5 +135,5 @@ RUN rm -f ~/.bash_logout
 
 # configure the endpoints to reach
 CMD ["/bin/bash", "-l"]
-CMD ["./primal-dual-pcg/build/protocol"]
-CMD ["./primal-dual-pcg/build/unit_tests"]
+CMD ["./build/protocol"]
+CMD ["./build/unit_tests"]
