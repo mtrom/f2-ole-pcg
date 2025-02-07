@@ -3,8 +3,9 @@ FROM ubuntu:jammy
 # set environment variables for tzdata
 ARG TZ=America/New_York
 ENV TZ=${TZ}
-ENV LANG en_US.UTF-8
-ENV TERM xterm-256color
+ENV LANG=en_US.UTF-8
+ENV LANGUAGE=en_US.UTF-8
+ENV TERM=xterm-256color
 
 # ensures project build can find shared libraries
 ENV LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
@@ -14,7 +15,7 @@ RUN echo "Acquire::http::Timeout \"10\";" > /etc/apt/apt.conf.d/99timeout
 RUN echo "Acquire::ftp::Timeout \"10\";" >> /etc/apt/apt.conf.d/99timeout
 RUN echo "Acquire::Retries \"3\";" >> /etc/apt/apt.conf.d/99retry
 
-ARG DEBIAN_FRONTEND=noninteractive
+# ARG DEBIAN_FRONTEND=noninteractive
 
 # install gcc-related packages
 RUN apt-get update && \
@@ -98,26 +99,26 @@ RUN wget https://archives.boost.io/release/1.86.0/source/boost_1_86_0.tar.gz && 
     (cd ./boost_1_86_0/; ./b2 install --with-program_options --with-thread --with-system --with-filesystem) && \
     rm -r boost_1_86_0 boost_1_86_0.tar.gz
 
-# configure our user
-WORKDIR /home/pcg-user/
-
-COPY thirdparty ./thirdparty/
-
-# build and install libOTe
-RUN (cd thirdparty/libOTe; python3 build.py --all --boost --sodium --relic)
-
-# copy repository to the image
-COPY include ./include/
-COPY src ./src/
-COPY test ./test/
-COPY cmake ./cmake/
-COPY CMakeLists.txt .
-
-# build our project
-RUN rm -rf build/ && \
-    mkdir build && \
-    (cd build; cmake ..) && \
-    (cd build; make -j$(nproc))
+# # configure our user
+# WORKDIR /home/pcg-user/
+#
+# COPY thirdparty ./thirdparty/
+#
+# # build and install libOTe
+# RUN (cd thirdparty/libOTe; python3 build.py --all --boost --sodium --relic)
+#
+# # copy repository to the image
+# COPY include ./include/
+# COPY src ./src/
+# COPY test ./test/
+# COPY cmake ./cmake/
+# COPY CMakeLists.txt .
+#
+# # build our project
+# RUN rm -rf build/ && \
+#     mkdir build && \
+#     (cd build; cmake ..) && \
+#     (cd build; make -j$(nproc))
 
 # remove unneeded .deb files
 RUN rm -r /var/lib/apt/lists/*
@@ -132,8 +133,9 @@ ARG EMAIL=nobody@example.com
 
 USER pcg-user
 RUN rm -f ~/.bash_logout
+WORKDIR /home/pcg-user
 
 # configure the endpoints to reach
 CMD ["/bin/bash", "-l"]
-CMD ["./build/protocol"]
-CMD ["./build/unit_tests"]
+# CMD ["./build/protocol"]
+# CMD ["./build/unit_tests"]

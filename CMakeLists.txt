@@ -17,6 +17,7 @@ include_directories(
   /usr/local/include
   /home/pcg-user/thirdparty/libOTe/cryptoTools
   /home/pcg-user/thirdparty/libOTe/out/build/linux/cryptoTools/
+  /home/pcg-user/thirdparty/libOTe/out/install/linux/include/
 )
 link_directories(/usr/lib/ssl)
 
