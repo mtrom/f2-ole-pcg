@@ -90,7 +90,8 @@ RUN apt-get -y install \
       telnet \
       time \
       traceroute \
-      libgmp3-dev
+      libgmp3-dev \
+      zlib1g-dev
 
 # install the specific version of boost that libOTe wants
 RUN wget https://archives.boost.io/release/1.86.0/source/boost_1_86_0.tar.gz && \
@@ -98,6 +99,19 @@ RUN wget https://archives.boost.io/release/1.86.0/source/boost_1_86_0.tar.gz && 
     (cd ./boost_1_86_0; ./bootstrap.sh) && \
     (cd ./boost_1_86_0/; ./b2 install --with-program_options --with-thread --with-system --with-filesystem) && \
     rm -r boost_1_86_0 boost_1_86_0.tar.gz
+
+# install the latest version of openssl
+WORKDIR /usr/local/src
+RUN wget https://www.openssl.org/source/openssl-3.4.0.tar.gz && \
+    tar -xvzf openssl-3.4.0.tar.gz && \
+    cd openssl-3.4.0 && \
+    ./config enable-asm --prefix=/usr/local/openssl --openssldir=/usr/local/openssl shared zlib && \
+    make -j$(nproc) && \
+    make install
+
+# Set environment variables to use the new OpenSSL version
+ENV PATH="/usr/local/openssl/bin:$PATH"
+ENV LD_LIBRARY_PATH="/usr/local/openssl/lib:$LD_LIBRARY_PATH"
 
 # # configure our user
 # WORKDIR /home/pcg-user/

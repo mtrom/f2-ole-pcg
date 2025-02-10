@@ -51,16 +51,52 @@ std::vector<uint32_t> sampleDistinct(int size, uint32_t max) {
 // INTEGER PRF
 ////////////////////////////////////////////////////////////////////////////////
 
+thread_local struct OpenSSLContext {
+  EVP_CIPHER_CTX* ctx;
+  OSSL_PROVIDER* provider;
+  EVP_CIPHER* cbc;
+  EVP_CIPHER* ctr;
+
+  OpenSSLContext() {
+    ctx = EVP_CIPHER_CTX_new();
+    if (ctx == nullptr) {
+      throw std::runtime_error("[OpenSSLContext] EVP_CIPHER_CTX_new error");
+    }
+    provider = OSSL_PROVIDER_load(NULL, "default");
+    if (!provider) {
+      throw std::runtime_error("[PRF::init] OSSL_PROVIDER_load failure");
+    }
+    cbc = EVP_CIPHER_fetch(NULL, "AES-128-CBC", NULL);
+    if (!cbc) {
+      throw std::runtime_error("[PRF::init] EVP_CIPHER_fetch failure");
+    }
+    ctr = EVP_CIPHER_fetch(NULL, "AES-128-ctr", NULL);
+    if (!ctr) {
+      throw std::runtime_error("[PRF::init] EVP_CIPHER_fetch failure");
+    }
+  }
+
+  ~OpenSSLContext() {
+    if (cbc) { EVP_CIPHER_free(cbc); }
+    if (ctr) { EVP_CIPHER_free(ctr); }
+    if (provider) { OSSL_PROVIDER_unload(provider); }
+    if (ctx) { EVP_CIPHER_CTX_free(ctx); }
+  }
+} ossl;
+
+
+////////////////////////////////////////////////////////////////////////////////
+// INTEGER PRF
+////////////////////////////////////////////////////////////////////////////////
+
 template<>
 uint32_t PRF<uint32_t>::operator()(BitString x, uint32_t max) const {
-  EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-  if (ctx == nullptr) {
-    throw std::runtime_error("[PRF<uint32_t>] EVP_CIPHER_CTX_new error");
+  if (ossl.ctx == nullptr) {
+    throw std::runtime_error("[PRF<uint32_t>] context not initialized");
   }
 
   // use AES encryption in CBC mode
-  if (EVP_EncryptInit_ex(ctx, EVP_aes_128_cbc(), nullptr, this->key.data(), nullptr) != 1) {
-    EVP_CIPHER_CTX_free(ctx);
+  if (EVP_EncryptInit_ex(ossl.ctx, ossl.cbc, nullptr, this->key.data(), nullptr) != 1) {
     throw std::runtime_error("[PRF<uint32_t>] EVP_EncryptInit_ex2 error");
   }
 
@@ -81,14 +117,12 @@ uint32_t PRF<uint32_t>::operator()(BitString x, uint32_t max) const {
     std::vector<unsigned char> outbytes(2 * BLOCK_SIZE);
 
     int outl1;
-    if (EVP_EncryptUpdate(ctx, outbytes.data(), &outl1, input.data(), input.nBytes()) != 1) {
-      EVP_CIPHER_CTX_free(ctx);
+    if (EVP_EncryptUpdate(ossl.ctx, outbytes.data(), &outl1, input.data(), input.nBytes()) != 1) {
       throw std::runtime_error("[PRF<uint32_t>] EVP_EncryptUpdate error");
     }
 
     int outl2;
-    if (EVP_EncryptFinal_ex(ctx, outbytes.data() + outl1, &outl2) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
+    if (EVP_EncryptFinal_ex(ossl.ctx, outbytes.data() + outl1, &outl2) != 1) {
         throw std::runtime_error("EVP_EncryptFinal_ex failed");
     }
 
@@ -101,7 +135,6 @@ uint32_t PRF<uint32_t>::operator()(BitString x, uint32_t max) const {
     counter++;
   }
 
-  EVP_CIPHER_CTX_free(ctx);
   return output % max;
 }
 
@@ -128,9 +161,9 @@ BitString PRF<BitString>::operator()(BitString x, uint32_t bits) const {
   if (x.nBytes() > BLOCK_SIZE) {
     throw std::runtime_error("[PRF<BitString>] input too large");
   }
-  EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-  if (ctx == nullptr) {
-    throw std::runtime_error("[PRF<BitString>] EVP_CIPHER_CTX_new error");
+
+  if (ossl.ctx == nullptr) {
+    throw std::runtime_error("[PRF<BitString>] context not initialized");
   }
 
   // set the initialization vector as the input x
@@ -138,8 +171,7 @@ BitString PRF<BitString>::operator()(BitString x, uint32_t bits) const {
   iv.resize(BLOCK_SIZE);
 
   // use AES encryption in CTR mode
-  if (EVP_EncryptInit_ex(ctx, EVP_aes_128_ctr(), nullptr, this->key.data(), iv.data()) != 1) {
-    EVP_CIPHER_CTX_free(ctx);
+  if (EVP_EncryptInit_ex(ossl.ctx, ossl.ctr, nullptr, this->key.data(), iv.data()) != 1) {
     throw std::runtime_error("[PRF<BitString>] EVP_EncryptInit_ex2 error");
   }
 
@@ -151,13 +183,10 @@ BitString PRF<BitString>::operator()(BitString x, uint32_t bits) const {
   int outl;
   std::vector<unsigned char> input(16, 0);
   for (size_t i = 0; i < output.size(); i += outl) {
-    if (EVP_EncryptUpdate(ctx, &output[i], &outl, input.data(), input.size()) != 1) {
-      EVP_CIPHER_CTX_free(ctx);
+    if (EVP_EncryptUpdate(ossl.ctx, &output[i], &outl, input.data(), input.size()) != 1) {
       throw std::runtime_error("[PRF<BitString>] EVP_EncryptUpdate error");
     }
   }
-
-  EVP_CIPHER_CTX_free(ctx);
 
   // truncate to the number of bytes we actually need
   output.resize((bits + 7) / 8);

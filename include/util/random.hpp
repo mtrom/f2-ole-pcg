@@ -1,6 +1,11 @@
 #pragma once
 
+#include <cstdlib>
+#include <mutex>
 #include <stdexcept>
+
+#include <openssl/evp.h>
+#include <openssl/provider.h>
 
 #include "util/bitstring.hpp"
 #include "util/defines.hpp"
