@@ -6,6 +6,7 @@
 #include <sstream>
 
 #include <boost/filesystem.hpp>
+#include <gmpxx.h>
 #include <openssl/bn.h>
 #include <openssl/evp.h>
 
@@ -226,21 +227,34 @@ GaussianSampler::GaussianSampler(std::string filename) {
   }
 
   // probability weights for each possible observation in the zero distribution
-  for (uint32_t i = 0, total = 0; i < this->_tail; i++) {
+  mpz_class total = 0;
+  mpz_class max_value = (mpz_class(1) << 80) - 1;  // 2^80 - 1
+
+  std::cout << "[Gauss] reading in distribution" << std::endl;
+  for (uint32_t i = 0; i < this->_tail; i++) {
     if (!std::getline(file, line)) {
       throw std::runtime_error("[GaussianSampler] config file too short");
     }
-    total += std::stol(line);
-    this->zero_dist.push_back(BitString::fromUInt(total, this->bits));
+
+    total += mpz_class(line);
+    if (total > max_value) { total = max_value; }
+
+    BitString cutoff(this->bits);
+    mpz_export(cutoff.data(), nullptr, -1, 1, 0, 0, total.get_mpz_t());
+    this->zero_dist.push_back(cutoff);
   }
 
   // probability weights for each possible observation in the one distribution
-  for (uint64_t i = 0, total = 0; i < this->_tail; i++) {
+  total = 0;
+  for (uint64_t i = 0; i < this->_tail; i++) {
     if (!std::getline(file, line)) {
       throw std::runtime_error("[GaussianSampler] config file too short");
     }
-    total += std::stol(line);
-    this->one_dist.push_back(BitString::fromUInt(total, this->bits));
+    total += mpz_class(line);
+    if (total > max_value) { total = max_value; }
+    BitString cutoff(this->bits);
+    mpz_export(cutoff.data(), nullptr, -1, 1, 0, 0, total.get_mpz_t());
+    this->one_dist.push_back(cutoff);
   }
 }
 

@@ -71,7 +71,7 @@ class GaussianSampler {
 public:
   // using a singleton so the config file is only read once
   static GaussianSampler& getInstance() {
-    static GaussianSampler instance("uniform.config");
+    static GaussianSampler instance("gauss.config");
     return instance;
   }
 
