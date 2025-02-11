@@ -1,4 +1,4 @@
-FROM ubuntu:jammy
+FROM ubuntu:jammy AS base
 
 # set environment variables for tzdata
 ARG TZ=America/New_York
@@ -8,7 +8,7 @@ ENV LANGUAGE=en_US.UTF-8
 ENV TERM=xterm-256color
 
 # ensures project build can find shared libraries
-ENV LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+ENV LD_LIBRARY_PATH="/usr/local/lib"
 
 # set higher timeouts to get through the build
 RUN echo "Acquire::http::Timeout \"10\";" > /etc/apt/apt.conf.d/99timeout
@@ -113,27 +113,6 @@ RUN wget https://www.openssl.org/source/openssl-3.4.0.tar.gz && \
 ENV PATH="/usr/local/openssl/bin:$PATH"
 ENV LD_LIBRARY_PATH="/usr/local/openssl/lib:$LD_LIBRARY_PATH"
 
-# # configure our user
-# WORKDIR /home/pcg-user/
-#
-# COPY thirdparty ./thirdparty/
-#
-# # build and install libOTe
-# RUN (cd thirdparty/libOTe; python3 build.py --all --boost --sodium --relic)
-#
-# # copy repository to the image
-# COPY include ./include/
-# COPY src ./src/
-# COPY test ./test/
-# COPY cmake ./cmake/
-# COPY CMakeLists.txt .
-#
-# # build our project
-# RUN rm -rf build/ && \
-#     mkdir build && \
-#     (cd build; cmake ..) && \
-#     (cd build; make -j$(nproc))
-
 # remove unneeded .deb files
 RUN rm -r /var/lib/apt/lists/*
 
@@ -149,7 +128,35 @@ USER pcg-user
 RUN rm -f ~/.bash_logout
 WORKDIR /home/pcg-user
 
-# configure the endpoints to reach
+
+# --- DEVELOPMENT BUILD ---
+FROM base AS dev
+
 CMD ["/bin/bash", "-l"]
-# CMD ["./build/protocol"]
-# CMD ["./build/unit_tests"]
+
+
+# --- PRODUCTION BUILD ---
+FROM base AS prod
+COPY --chown=pcg-user:pcg-user . /home/pcg-user/
+
+# build and install libOTe
+RUN (cd thirdparty/libOTe; python3 build.py --all --boost --sodium --relic)
+
+# copy repository to the image
+COPY include ./include/
+COPY src ./src/
+COPY test ./test/
+COPY cmake ./cmake/
+COPY CMakeLists.txt .
+
+# build our project
+RUN rm -rf build/ && \
+    mkdir build && \
+    (cd build; cmake ..) && \
+    (cd build; make -j$(nproc))
+
+# run tests
+RUN ./build/unit_tests
+
+# the primary endpoint is to run the protocol
+ENTRYPOINT ["./build/protocol"]

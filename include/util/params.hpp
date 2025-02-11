@@ -40,8 +40,8 @@ public:
 
   std::string toString() const {
     std::ostringstream out;
-    out << "n = " << n << ", k = " << k;
-    out << ", t = " << t << ", l = " << l;
+    out << "N = " << n << ", n = " << k;
+    out << ", t1 = " << t << ", l = " << l;
     return out.str();
   }
 };
@@ -71,7 +71,7 @@ public:
 
   std::string toString() const {
     std::ostringstream out;
-    out << "N = " << N() << ", t = " << t;
+    out << "k = " << N() << ", t2 = " << t;
     out << ", c = " << std::fixed << std::setprecision(1) << c;
     return out.str();
   }
@@ -116,8 +116,8 @@ public:
 
   std::string toString() const {
     return (
-      "[LPN::Primal] " + primal.toString() + "\n" +
-      "[LPN::Dual]   " + dual.toString()
+      "[ primal ] " + primal.toString() + "\n" +
+      "[  dual  ] " + dual.toString()
     );
   }
 

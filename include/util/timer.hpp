@@ -31,8 +31,8 @@ public:
     auto stop = std::chrono::high_resolution_clock::now();
     std::chrono::duration<float> elapsed = stop - start_;
     std::cout << std::fixed << std::setprecision(3);
-    std::cout << color << message << " (s)\t: ";
-    std::cout << elapsed.count() << RESET << std::endl;
+    std::cout << color << message << "\t: ";
+    std::cout << elapsed.count() << " s" << RESET << std::endl;
   }
 private:
   std::string message;

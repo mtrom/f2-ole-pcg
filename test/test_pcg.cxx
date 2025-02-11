@@ -15,18 +15,13 @@ class PCGTests : public NetworkTest { };
 
 // insecure but small params to test with
 PCGParams TEST_PARAMS(
-  BitString::sample(LAMBDA), 1 << 16, 1 << 10, 1 << 8, 1 << 3,
-  BitString::sample(LAMBDA), 1 << 2, 1 << 5
+  BitString::sample(LAMBDA), 1 << 20, 1 << 11, 1 << 10, 5,
+  BitString::sample(LAMBDA), 4, 1 << 5
 );
 
 TEST_F(PCGTests, PCGRun) {
-  PCGParams params(
-    BitString::sample(LAMBDA), 1 << 12, 1 << 7, 1 << 6, 1 << 3,
-    BitString::sample(LAMBDA), 4, 7
-  );
-
-  PCG::Sender alice(params);
-  PCG::Receiver bob(params);
+  PCG::Sender alice(TEST_PARAMS);
+  PCG::Receiver bob(TEST_PARAMS);
 
   std::pair<size_t, size_t> nOTs = alice.numOTs();
   auto [alice_srots, bob_rrots] = ROT::mocked(nOTs.first);
@@ -55,13 +50,8 @@ TEST_F(PCGTests, PCGRun) {
 }
 
 TEST_F(PCGTests, PCGNumOTs) {
-  PCGParams params(
-    BitString::sample(LAMBDA), 1 << 12, 1 << 7, 1 << 6, 1 << 3,
-    BitString::sample(LAMBDA), 4, 7
-  );
-
-  PCG::Sender alice(params);
-  PCG::Receiver bob(params);
+  PCG::Sender alice(TEST_PARAMS);
+  PCG::Receiver bob(TEST_PARAMS);
 
   std::pair<size_t, size_t> nOTs = alice.numOTs();
   auto [alice_srots, bob_rrots] = ROT::mocked(nOTs.first);

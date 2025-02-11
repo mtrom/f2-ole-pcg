@@ -23,7 +23,7 @@ void run(const PCGParams& params, const std::string& host, bool send) {
   boost::asio::io_service ios;
   Channel channel = std::make_shared<TCP>(ios, address::from_string(host), BASE_PORT);
 
-  std::cout << params.toString() << std::endl;
+  std::cout << params.toString() << std::endl << std::endl;
 
   std::unique_ptr<PCG::Base> pcg;
   if (send) { pcg = std::make_unique<PCG::Sender>(params); }
@@ -31,13 +31,13 @@ void run(const PCGParams& params, const std::string& host, bool send) {
 
   pcg->init();
 
-  timer.start("[prepare]");
+  timer.start("[protocol] prepare");
   pcg->prepare();
   timer.stop();
 
   channel->join();
 
-  timer.start("[online]");
+  timer.start("[protocol] online");
   size_t upload, download;
 
   // create the mocked random ots for use in the protocol
@@ -67,9 +67,9 @@ void run(const PCGParams& params, const std::string& host, bool send) {
   download += channel->download();
   float uploadMB = (float) upload / (size_t) (1 << 20);
   float downloadMB = (float) download / (size_t) (1 << 20);
-  std::cout << "          upload   = " << uploadMB << "MB" << std::endl;
-  std::cout << "          download = " << downloadMB << "MB" << std::endl;
-  std::cout << "          total    = " << (uploadMB + downloadMB) << "MB" << std::endl;
+    std::cout << "           upload       : " << uploadMB << " MB" << std::endl;
+    std::cout << "           download     : " << downloadMB << " MB" << std::endl;
+    std::cout << "           total        : " << (uploadMB + downloadMB) << " MB" << std::endl;
 
   channel.reset();
 
@@ -77,22 +77,22 @@ void run(const PCGParams& params, const std::string& host, bool send) {
   // (allows for larger parameters to be run)
   pcg->clear();
 
-  timer.start("[finalize]");
+  timer.start("[protocol] finalize");
   pcg->finalize();
   timer.stop();
 
   // resample public matrices
   pcg->init();
 
-  timer.start("[expand]");
+  timer.start("[ expand ] expand");
   pcg->expand();
   timer.stop();
 
-  std::cout << GREEN << "[offline] done." << RESET << std::endl;
+  std::cout << GREEN << "[  done  ] success." << RESET << std::endl;
 }
 
 void runBoth(const PCGParams& params) {
-  std::cout << params.toString() << std::endl;
+  std::cout << params.toString() << std::endl << std::endl;
 
   auto alice = std::async(std::launch::async, [params]() {
     Timer timer;
@@ -105,11 +105,11 @@ void runBoth(const PCGParams& params) {
     PCG::Sender pcg(params);
     pcg.init();
 
-    timer.start("[offline] prepare");
+    timer.start("[protocol] prepare");
     pcg.prepare();
     timer.stop();
 
-    timer.start("[offline] online");
+    timer.start("[protocol] online");
     size_t upload, download;
 
     // create the mocked random ots for use in the protocol
@@ -129,15 +129,15 @@ void runBoth(const PCGParams& params) {
     download += channel->download();
     float uploadMB = (float) upload / (size_t) (1 << 20);
     float downloadMB = (float) download / (size_t) (1 << 20);
-    std::cout << "          upload   = " << uploadMB << "MB" << std::endl;
-    std::cout << "          download = " << downloadMB << "MB" << std::endl;
-    std::cout << "          total    = " << (uploadMB + downloadMB) << "MB" << std::endl;
+    std::cout << "           upload       : " << uploadMB << " MB" << std::endl;
+    std::cout << "           download     : " << downloadMB << " MB" << std::endl;
+    std::cout << "           total        : " << (uploadMB + downloadMB) << " MB" << std::endl;
 
-    timer.start("[offline] finalize");
+    timer.start("[protocol] online");
     pcg.finalize();
     timer.stop();
 
-    timer.start("[offline] expand");
+    timer.start("[ expand ] expand");
     pcg.expand();
     timer.stop();
 
@@ -172,9 +172,9 @@ void runBoth(const PCGParams& params) {
   std::tie(b, c1) = bob.get();
 
   if ((a & b) == (c0 ^ c1)) {
-    std::cout << GREEN << "[offline] success." << RESET << std::endl;
+    std::cout << GREEN << "[  done  ] success." << RESET << std::endl;
   } else {
-    std::cout << RED << "[offline] failure." << RESET << std::endl;
+    std::cout << RED << "[  done  ] failure." << RESET << std::endl;
   }
 }
 
@@ -219,7 +219,7 @@ int main(int argc, char *argv[]) {
     bool both = vm["both"].as<bool>();
 
     if (send && recv) {
-      std::cerr << "[offline] to run protocol with both parties use --both flag" << std::endl;
+      std::cerr << "[protocol] to run protocol with both parties use --both flag" << std::endl;
     }
 
     std::string host = vm["host"].as<std::string>();
@@ -247,11 +247,11 @@ int main(int argc, char *argv[]) {
     } else if (recv) {
       run(params, host, false);
     } else {
-      std::cerr << "[offline] need one of --send, --recv, or --both to be true" << std::endl;
+      std::cerr << "[protocol] need one of --send, --recv, or --both to be true" << std::endl;
     }
     return 0;
   } catch (const options::error &ex) {
-    std::cerr << "[offline] error: " << ex.what() << std::endl;
+    std::cerr << "[protocol] error: " << ex.what() << std::endl;
     return 1;
   }
 }

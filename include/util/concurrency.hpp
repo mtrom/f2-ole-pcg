@@ -11,15 +11,7 @@
 #define DEFAULT_THREAD_COUNT 8
 
 // global constant for thread count, initialized in cxx
-const size_t THREAD_COUNT = []() {
-  size_t count = (
-    std::thread::hardware_concurrency() > 0
-    ? std::thread::hardware_concurrency()
-    : DEFAULT_THREAD_COUNT
-  );
-  std::cout << "[Info] using thread count " << count << std::endl;
-  return count;
-}();
+extern const size_t THREAD_COUNT;
 
 // spin up `THREAD_COUNT` treads which call `task` with the thread id
 void MULTI_TASK(std::function<void(size_t, size_t)> task, size_t num_tasks);

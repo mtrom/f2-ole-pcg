@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.10)
 
 # project details
-project(primal-dual-pcg VERSION 1.0)
+project(f2-triples-pcg VERSION 1.0)
 set(FRONTEND_EXEC protocol)
-set(LIBRARY_NAME primal_dual_pcg)
+set(LIBRARY_NAME f2_triples_pcg)
 
 # packages
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -O3 -std=c++20 -maes -mavx -mpclmul -mbmi2 -msse2 -no-pie -Wno-ignored-attributes")
