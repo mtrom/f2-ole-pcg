@@ -7,13 +7,20 @@
 #include <openssl/evp.h>
 #include <openssl/provider.h>
 
+#include <cryptoTools/Common/block.h>
+#include <cryptoTools/Crypto/AES.h>
+
 #include "util/bitstring.hpp"
 #include "util/defines.hpp"
 
+/**
+ * depending on the performance impact, this either uses openssl's aes hooks
+ * or cryptoTools's PRGN
+ */
 template<typename T>
 class PRF {
 public:
-  PRF(BitString key) { this->setKey(key.toBytes()); }
+  PRF(BitString key) : aes(osuCrypto::toBlock(key.data())) { this->setKey(key.toBytes()); }
 
   T operator()(uint32_t x) const;
   T operator()(std::pair<uint32_t, uint32_t> x) const;
@@ -33,6 +40,8 @@ public:
 
 private:
   std::vector<unsigned char> key;
+
+  osuCrypto::AES aes;
 
   // generic version that can be used by templated functions
   T operator()(BitString x, uint32_t bound) const;

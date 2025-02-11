@@ -1,5 +1,7 @@
 #include <stack>
 
+#include "cryptoTools/Crypto/PRNG.h"
+
 #include "pkg/pprf.hpp"
 #include "ahe/ahe.hpp"
 #include "util/concurrency.hpp"
@@ -19,9 +21,11 @@ PPRF::PPRF(BitString key, size_t outsize, size_t domainsize)
 
     BitString left(this->keysize), right(this->keysize);
     for (size_t i = 0; i < this->leafs->size(); i++) {
-      PRF<BitString> prf((*this->leafs)[i]);
-      (*next)[2 * i] = prf(0, this->keysize);
-      (*next)[2 * i + 1] = prf(1, this->keysize);
+      PRNG prng(toBlock((*this->leafs)[i].data()));
+      (*next)[2 * i].resize(this->keysize);
+      (*next)[2 * i + 1].resize(this->keysize);
+      prng.get<uint8_t>((*next)[2 * i].data(), (this->keysize + 7) / 8);
+      prng.get<uint8_t>((*next)[2 * i + 1].data(), (this->keysize + 7) / 8);
 
       left ^= (*next)[2 * i];
       right ^= (*next)[2 * i + 1];
@@ -38,8 +42,10 @@ PPRF::PPRF(BitString key, size_t outsize, size_t domainsize)
       // if domainsize isn't (2^x) toss out the extra leafs
       (*this->leafs)[i] = BitString();
     } else {
-      PRF<BitString> prf((*this->leafs)[i]);
-      (*this->leafs)[i] = prf(0, this->outsize);
+      PRNG prng(toBlock((*this->leafs)[i].data()));
+      (*this->leafs)[i].resize(this->outsize);
+      prng.get<uint8_t>((*this->leafs)[i].data(), (this->outsize + 7) / 8);
+
       if (i % 2 == 0) { left ^= (*this->leafs)[i]; }
       else            { right ^= (*this->leafs)[i]; }
     }
@@ -71,9 +77,11 @@ void PPRF::expand() {
       if ((*this->leafs)[i].size() == 0) {
         sibling = 2 * i + (path[l] ? 0 : 1);
       } else {
-        PRF<BitString> prf((*this->leafs)[i]);
-        (*next)[2 * i] = prf(0, this->keysize);
-        (*next)[2 * i + 1] = prf(1, this->keysize);
+        PRNG prng(toBlock((*this->leafs)[i].data()));
+        (*next)[2 * i].resize(this->keysize);
+        (*next)[2 * i + 1].resize(this->keysize);
+        prng.get<uint8_t>((*next)[2 * i].data(), (this->keysize + 7) / 8);
+        prng.get<uint8_t>((*next)[2 * i + 1].data(), (this->keysize + 7) / 8);
 
         left ^= (*next)[2 * i];
         right ^= (*next)[2 * i + 1];
@@ -92,8 +100,10 @@ void PPRF::expand() {
       // if domainsize isn't (2^x) toss out the extra leafs
       (*this->leafs)[i] = BitString();
     } else {
-      PRF<BitString> prf((*this->leafs)[i]);
-      (*this->leafs)[i] = prf(0, this->outsize);
+      PRNG prng(toBlock((*this->leafs)[i].data()));
+      (*this->leafs)[i].resize(this->outsize);
+      prng.get<uint8_t>((*this->leafs)[i].data(), (this->outsize + 7) / 8);
+
       if (i % 2 == 0) { left ^= (*this->leafs)[i]; }
       else            { right ^= (*this->leafs)[i]; }
     }
@@ -212,9 +222,11 @@ BitPPRF::BitPPRF(BitString key, size_t domainsize)
     BitString left(nodesize);
     BitString right(nodesize);
     for (size_t i = 0; i < previous->size(); i++) {
-      PRF<BitString> prf((*previous)[i]);
-      (*next)[2 * i] = prf(0, nodesize);
-      (*next)[2 * i + 1] = prf(1, nodesize);
+      PRNG prng(toBlock((*previous)[i].data()));
+      (*next)[2 * i].resize(nodesize);
+      (*next)[2 * i + 1].resize(nodesize);
+      prng.get<uint8_t>((*next)[2 * i].data(), (nodesize + 7) / 8);
+      prng.get<uint8_t>((*next)[2 * i + 1].data(), (nodesize + 7) / 8);
 
       left ^= (*next)[2 * i];
       right ^= (*next)[2 * i + 1];
@@ -258,9 +270,11 @@ void BitPPRF::expand() {
       } else if ((*previous)[i].size() == 0 && path[l]) {
         sibling = 2 * i;
       } else {
-        PRF<BitString> prf((*previous)[i]);
-        (*next)[2 * i] = prf(0, nodesize);
-        (*next)[2 * i + 1] = prf(1, nodesize);
+        PRNG prng(toBlock((*previous)[i].data()));
+        (*next)[2 * i].resize(nodesize);
+        (*next)[2 * i + 1].resize(nodesize);
+        prng.get<uint8_t>((*next)[2 * i].data(), (nodesize + 7) / 8);
+        prng.get<uint8_t>((*next)[2 * i + 1].data(), (nodesize + 7) / 8);
 
         left ^= (*next)[2 * i];
         right ^= (*next)[2 * i + 1];

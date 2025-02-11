@@ -45,7 +45,7 @@ void run(const PCGParams& params, const std::string& host, bool send) {
   ROT::Sender sender;
   ROT::Receiver receiver;
   if (send) {
-    auto comms = sender.run(srots, host, OT_EXT_PORT);
+    auto comms = sender.run(srots, "0.0.0.0", OT_EXT_PORT);
     upload += comms.first;
     download += comms.second;
     comms = receiver.run(rrots, host, OT_EXT_PORT);
@@ -55,7 +55,7 @@ void run(const PCGParams& params, const std::string& host, bool send) {
     auto comms = receiver.run(rrots, host, OT_EXT_PORT);
     upload += comms.first;
     download += comms.second;
-    comms = sender.run(srots, host, OT_EXT_PORT);
+    comms = sender.run(srots, "0.0.0.0", OT_EXT_PORT);
     upload += comms.first;
     download += comms.second;
   }

@@ -9,6 +9,11 @@
 #include <openssl/bn.h>
 #include <openssl/evp.h>
 
+#include <cryptoTools/Common/block.h>
+#include <cryptoTools/Crypto/AES.h>
+
+using namespace osuCrypto;
+
 uint32_t sampleLessThan(uint32_t max) {
   // convert max to an OpenSSL BIGNUM
   BIGNUM* bn_max = BN_new();
@@ -157,56 +162,31 @@ template class PRF<uint32_t>;
 ////////////////////////////////////////////////////////////////////////////////
 
 template<>
-BitString PRF<BitString>::operator()(BitString x, uint32_t bits) const {
-  if (x.nBytes() > BLOCK_SIZE) {
-    throw std::runtime_error("[PRF<BitString>] input too large");
-  }
+BitString PRF<BitString>::operator()(uint32_t x, uint32_t bits) const {
 
-  if (ossl.ctx == nullptr) {
-    throw std::runtime_error("[PRF<BitString>] context not initialized");
-  }
-
-  // set the initialization vector as the input x
-  std::vector<unsigned char> iv = x.toBytes();
-  iv.resize(BLOCK_SIZE);
-
-  // use AES encryption in CTR mode
-  if (EVP_EncryptInit_ex(ossl.ctx, ossl.ctr, nullptr, this->key.data(), iv.data()) != 1) {
-    throw std::runtime_error("[PRF<BitString>] EVP_EncryptInit_ex2 error");
-  }
-
-  // output is initially sized to the minimum multiple of the block size we need
+  // output is sized to the minimum multiple of the block size we need
   const size_t blocks = (((bits + 7) / 8) + BLOCK_SIZE - 1) / BLOCK_SIZE;
-  std::vector<unsigned char> output(blocks * BLOCK_SIZE);
+  std::vector<block> output(blocks);
 
-  // run aes until we have enough pseudorandom bits
-  int outl;
-  std::vector<unsigned char> input(16, 0);
-  for (size_t i = 0; i < output.size(); i += outl) {
-    if (EVP_EncryptUpdate(ossl.ctx, &output[i], &outl, input.data(), input.size()) != 1) {
-      throw std::runtime_error("[PRF<BitString>] EVP_EncryptUpdate error");
-    }
+  this->aes.ecbEncCounterMode((uint64_t) x << 32, blocks, output.data());
+  std::vector<unsigned char> bytes(output.size() * BLOCK_SIZE);
+
+  unsigned char* ptr = bytes.data();
+  for (auto i = 0; i < output.size(); i++) {
+    memcpy(ptr, output[i].data(), sizeof(block));
   }
 
-  // truncate to the number of bytes we actually need
-  output.resize((bits + 7) / 8);
-
-  // ensure any extra bits are 0 (for internal consistancy)
-  output[output.size() - 1] &= (0xFF >> ((output.size() * 8) - bits));
-
-  return BitString(output, bits);
+  return BitString(ptr, bits);
 }
 
 template<>
-BitString PRF<BitString>::operator()(uint32_t x, uint32_t max) const {
-  return this->operator()(BitString::fromUInt(x, 32), max);
+BitString PRF<BitString>::operator()(BitString x, uint32_t max) const {
+  throw std::runtime_error("not implemented");
 }
 
 template<>
 BitString PRF<BitString>::operator()(std::pair<uint32_t, uint32_t> x, uint32_t max) const {
-  return this->operator()(
-    BitString::fromUInt(x.first, 32) + BitString::fromUInt(x.second, 32), max
-  );
+  throw std::runtime_error("not implemented");
 }
 
 ////////////////////////////////////////////////////////////////////////////////
