@@ -8,7 +8,6 @@
 #include <boost/filesystem.hpp>
 #include <gmpxx.h>
 #include <openssl/bn.h>
-#include <openssl/evp.h>
 
 #include <cryptoTools/Common/block.h>
 #include <cryptoTools/Crypto/AES.h>
@@ -57,55 +56,8 @@ std::vector<uint32_t> sampleDistinct(int size, uint32_t max) {
 // INTEGER PRF
 ////////////////////////////////////////////////////////////////////////////////
 
-thread_local struct OpenSSLContext {
-  EVP_CIPHER_CTX* ctx;
-  OSSL_PROVIDER* provider;
-  EVP_CIPHER* cbc;
-  EVP_CIPHER* ctr;
-
-  OpenSSLContext() {
-    ctx = EVP_CIPHER_CTX_new();
-    if (ctx == nullptr) {
-      throw std::runtime_error("[OpenSSLContext] EVP_CIPHER_CTX_new error");
-    }
-    provider = OSSL_PROVIDER_load(NULL, "default");
-    if (!provider) {
-      throw std::runtime_error("[PRF::init] OSSL_PROVIDER_load failure");
-    }
-    cbc = EVP_CIPHER_fetch(NULL, "AES-128-CBC", NULL);
-    if (!cbc) {
-      throw std::runtime_error("[PRF::init] EVP_CIPHER_fetch failure");
-    }
-    ctr = EVP_CIPHER_fetch(NULL, "AES-128-ctr", NULL);
-    if (!ctr) {
-      throw std::runtime_error("[PRF::init] EVP_CIPHER_fetch failure");
-    }
-  }
-
-  ~OpenSSLContext() {
-    if (cbc) { EVP_CIPHER_free(cbc); }
-    if (ctr) { EVP_CIPHER_free(ctr); }
-    if (provider) { OSSL_PROVIDER_unload(provider); }
-    if (ctx) { EVP_CIPHER_CTX_free(ctx); }
-  }
-} ossl;
-
-
-////////////////////////////////////////////////////////////////////////////////
-// INTEGER PRF
-////////////////////////////////////////////////////////////////////////////////
-
 template<>
 uint32_t PRF<uint32_t>::operator()(BitString x, uint32_t max) const {
-  if (ossl.ctx == nullptr) {
-    throw std::runtime_error("[PRF<uint32_t>] context not initialized");
-  }
-
-  // use AES encryption in CBC mode
-  if (EVP_EncryptInit_ex(ossl.ctx, ossl.cbc, nullptr, this->key.data(), nullptr) != 1) {
-    throw std::runtime_error("[PRF<uint32_t>] EVP_EncryptInit_ex2 error");
-  }
-
   uint32_t output;
 
   // largest multiple of max within uint32_t
@@ -116,26 +68,14 @@ uint32_t PRF<uint32_t>::operator()(BitString x, uint32_t max) const {
 
   // sample until you get value below max_multiple (to ensure a uniform distribution)
   while (true) {
-    // function input is the AES input
     BitString input = x + BitString::fromUInt(counter, 32);
+    input.resize(BLOCK_SIZE * 8);
+    block b = this->aes.ecbEncBlock(toBlock(input.data()));
+    std::vector<unsigned char> bytes(BLOCK_SIZE);
 
-    // need an extra block size for padding, I guess?
-    std::vector<unsigned char> outbytes(2 * BLOCK_SIZE);
+    memcpy(bytes.data(), &b, sizeof(block));
 
-    int outl1;
-    if (EVP_EncryptUpdate(ossl.ctx, outbytes.data(), &outl1, input.data(), input.nBytes()) != 1) {
-      throw std::runtime_error("[PRF<uint32_t>] EVP_EncryptUpdate error");
-    }
-
-    int outl2;
-    if (EVP_EncryptFinal_ex(ossl.ctx, outbytes.data() + outl1, &outl2) != 1) {
-        throw std::runtime_error("EVP_EncryptFinal_ex failed");
-    }
-
-    // should reduce to a single BLOCK_SIZE
-    outbytes.resize(outl1 + outl2);
-
-    output = BitString(outbytes).toUInt();
+    output = BitString(bytes).toUInt();
     if (output < max_multiple) { break; }
 
     counter++;
@@ -230,7 +170,6 @@ GaussianSampler::GaussianSampler(std::string filename) {
   mpz_class total = 0;
   mpz_class max_value = (mpz_class(1) << 80) - 1;  // 2^80 - 1
 
-  std::cout << "[Gauss] reading in distribution" << std::endl;
   for (uint32_t i = 0; i < this->_tail; i++) {
     if (!std::getline(file, line)) {
       throw std::runtime_error("[GaussianSampler] config file too short");

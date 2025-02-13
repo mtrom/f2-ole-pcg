@@ -1,19 +1,42 @@
-## Build
-To create the docker image
+## Overview
+
+This repository implements the programmable pseudorandom correlation generator (PCG) for oblivious linear evaluations
+(OLE) over the binary field. It includes both the interactive seed exchange protocol and seed expansion.
+
+
+## Running Evaluations
+
+This project has been containerized with Docker so it suffices to pull the pre-build image and run it directly — i.e.,
+```
+docker pull ghcr.io/mtrom/f2-ole-pcg:latest
+```
+and
+```
+docker run --rm --network host ghcr.io/mtrom/f2-ole-pcg:latest [ARGS]
+```
+Use `--help` to see the available arguments.
+
+
+> [!NOTE]
+> The `--network host` flag is necessary if you will be running the protocol between multiple hosts.
+
+## Building the Project
+
+In order to make development easier, there is a `dev` docker target that does not automatically compile the project.
+Run the following from the base directory:
 ```bash
-docker build --no-cache -t primal-dual-pcg:latest -f Dockerfile .
+docker build -t f2-ole-pcg:dev --target dev -f Dockerfile .
 ```
-
-Connecting to the container run the following from within this directory:
+This will create a Docker image. Now create a container from that image and mount the base directory:
 ```bash
-docker run -it --name pcg-container -v "$(pwd):/home/pcg-user" --network host primal-dual-pcg:latest
+docker run -it --name pcg-container -v "$(pwd):/home/pcg-user" --network host f2-ole-pcg:dev
 ```
-
-Once connected to the container:
+At this point you will be connected to the container and can build the project. Start with the `libOTe` dependency
+```bash
+(cd thirdparty/libOTe; python3 build.py --all --boost --sodium --relic)
 ```
-./build.sh
+and then the project
+```bash
+mkdir build && (cd build; cmake ..) && (cd build; make -j$(nproc))
 ```
-
-## Run
-The `primal-dual-pcg/build/` directory will have two binaries: `unit_tests` and `protocols`, the latter of which has a
-help message if given `--help`.
+This will compile two binaries: `build/unit_tests` and `build/protocol`. Use `--help` for the protocol arguments.

@@ -1,5 +1,9 @@
 FROM ubuntu:jammy AS base
 
+LABEL org.opencontainers.image.source=https://github.com/mtrom/f2-ole-pcg
+LABEL org.opencontainers.image.description="Research prototype of a PCG for programmable OLE over the binary field."
+LABEL org.opencontainers.image.licenses=MIT
+
 # set environment variables for tzdata
 ARG TZ=America/New_York
 ENV TZ=${TZ}
