@@ -230,7 +230,6 @@ GaussianSampler::GaussianSampler(std::string filename) {
   mpz_class total = 0;
   mpz_class max_value = (mpz_class(1) << 80) - 1;  // 2^80 - 1
 
-  std::cout << "[Gauss] reading in distribution" << std::endl;
   for (uint32_t i = 0; i < this->_tail; i++) {
     if (!std::getline(file, line)) {
       throw std::runtime_error("[GaussianSampler] config file too short");
