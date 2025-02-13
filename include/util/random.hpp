@@ -4,19 +4,12 @@
 #include <mutex>
 #include <stdexcept>
 
-#include <openssl/evp.h>
-#include <openssl/provider.h>
-
 #include <cryptoTools/Common/block.h>
 #include <cryptoTools/Crypto/AES.h>
 
 #include "util/bitstring.hpp"
 #include "util/defines.hpp"
 
-/**
- * depending on the performance impact, this either uses openssl's aes hooks
- * or cryptoTools's PRGN
- */
 template<typename T>
 class PRF {
 public:
